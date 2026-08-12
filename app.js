@@ -34,17 +34,7 @@ app.get('/health/db', reportController.healthDb);
 
 // Root Endpoint
 app.get('/', (req, res) => {
-  res.json({
-    status: 'ok',
-    message: 'Epix Report API',
-    endpoints: {
-      reportCustomerWithDb: '/:dbName/report/customer',
-      reportCustomerDefault: '/report/customer',
-      listDatabases: '/databases',
-      healthWithDb: '/:dbName/health/db',
-      healthDefault: '/health/db',
-    },
-  });
+  return res.redirect('/public/index.html');
 });
 
 // 404 Handler (Penanganan Endpoint Tidak Ditemukan)

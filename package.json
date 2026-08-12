@@ -1,0 +1,24 @@
+{
+  "name": "sql-report-app",
+  "version": "1.0.0",
+  "description": "Report app - Node.js 24 + Express + EJS + SQL Server 2008",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test-db": "node test-connection.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.21.0",
+    "mssql": "^10.0.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,53 @@
+<%- include('partials/header') %>
+
+<h3 class="mb-3"><%= title %></h3>
+<p class="text-muted">Database aktif: <strong><%= dbName || '-' %></strong></p>
+
+<form method="GET" action="<%= formAction %>" class="row g-2 align-items-end mb-4">
+  <div class="col-auto">
+    <label class="form-label">Tanggal Awal</label>
+    <input type="date" name="startDate" value="<%= startDate %>" class="form-control">
+  </div>
+  <div class="col-auto">
+    <label class="form-label">Tanggal Akhir</label>
+    <input type="date" name="endDate" value="<%= endDate %>" class="form-control">
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-primary">Tampilkan</button>
+  </div>
+</form>
+
+<% if (error) { %>
+  <div class="alert alert-danger"><%= error %></div>
+<% } %>
+
+<div class="table-responsive">
+  <table class="table table-bordered table-striped table-sm">
+    <thead class="table-dark">
+      <tr>
+        <% if (data.length > 0) { %>
+          <% Object.keys(data[0]).forEach(col => { %>
+            <th><%= col %></th>
+          <% }) %>
+        <% } else { %>
+          <th>Data</th>
+        <% } %>
+      </tr>
+    </thead>
+    <tbody>
+      <% if (data.length > 0) { %>
+        <% data.forEach(row => { %>
+          <tr>
+            <% Object.values(row).forEach(val => { %>
+              <td><%= val %></td>
+            <% }) %>
+          </tr>
+        <% }) %>
+      <% } else { %>
+        <tr><td class="text-center text-muted">Belum ada data. Silakan pilih tanggal.</td></tr>
+      <% } %>
+    </tbody>
+  </table>
+</div>
+
+<%- include('partials/footer') %>

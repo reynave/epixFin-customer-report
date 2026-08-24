@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Laporan Pembelian & Utang Supplier</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="bg-light">
+
+  <div class="container my-2">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <div>
+        <button class="btn btn-warning btn-sm" onclick="window.history.back()">Back to Report Launcher</button>
+      </div>
+      <div>
+        <h2 class="fw-bold text-dark mb-0">Laporan Utang Supplier</h2>
+        <p class="text-muted mb-0" id="report-info">
+          Database: <span id="db-name" class="fw-bold text-dark">-</span> |
+          Periode: <span id="report-period" class="fw-bold text-dark">-</span>
+        </p>
+      </div>
+      <button class="btn btn-outline-secondary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i> Cetak Laporan
+      </button>
+    </div>
+
+    <div class="mb-2 text-end">
+      <a href="#"  onclick="$('.query').toggleClass('d-none')"><small>Show/Hide Queries</small></a>
+    </div>
+    <div class="alert alert-light d-none query"  role="alert">
+      <div>
+        <strong>Query Report:</strong>
+        <code>
+        <pre id="q"></pre>
+      </code>
+      </div>
+
+
+      <div>
+        <strong>Query Saldo Awal Report:</strong>
+        <code>
+      <pre id="q0"></pre>
+    </code>
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body">
+            <span class="text-muted small fw-medium">Total Supplier</span>
+            <h3 class="fw-bold text-primary mt-2 mb-0" id="stat-total-supplier">0</h3>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body">
+            <span class="text-muted small fw-medium">Total Invoice (Tagihan)</span>
+            <h3 class="fw-bold text-dark mt-2 mb-0" id="stat-total-invoice">Rp 0</h3>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body">
+            <span class="text-muted small fw-medium">Total Terbayar (Paid)</span>
+            <h3 class="fw-bold text-success mt-2 mb-0" id="stat-total-paid">Rp 0</h3>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body">
+            <span class="text-muted small fw-medium">Sisa Utang (Net Result)</span>
+            <h3 class="fw-bold text-danger mt-2 mb-0" id="stat-total-result">Rp 0</h3>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Report Container -->
+    <div class="card border-0 shadow-sm">
+      <!-- Search Bar Toolbar -->
+      <div class="card-header bg-white py-3 border-0">
+        <div class="row align-items-center">
+          <div class="col-md-4">
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+              <input type="text" id="search-input" class="form-control bg-light border-start-0"
+                placeholder="Cari Nama atau ID Supplier...">
+            </div>
+          </div>
+          <div class="col-md-8 text-md-end mt-2 mt-md-0">
+            <span class="text-muted small" id="search-count">Menampilkan seluruh data</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" id="report-table">
+            <thead class="table-light sticky-top">
+
+              <tr>
+                <th scope="col" class="ps-4">Supplier</th>
+                <th scope="col">ID Supplier</th>
+                <th scope="col" class="text-end">Saldo Awal</th>
+                <th scope="col" class="text-end">Invoice Total</th>
+                <th scope="col" class="text-end">Paid Total</th>
+                <th scope="col" class="text-end">Sisa (Result)</th>
+                <th scope="col" class="text-center">Status</th>
+                <th scope="col" class="text-center pe-4">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="report-body">
+              <!-- Data JSON dimuat di sini -->
+            </tbody>
+            <tfoot class="table-group-divider fw-bold bg-light">
+              <tfoot class="table-group-divider fw-bold bg-light">
+                <tr>
+                  <td colspan="2" class="ps-4">TOTAL (FILTERED)</td>
+                  <td class="text-end" id="foot-saldo-awal">Rp 0</td>
+                  <td class="text-end" id="foot-invoice">Rp 0</td>
+                  <td class="text-end" id="foot-paid">Rp 0</td>
+                  <td class="text-end" id="foot-result">Rp 0</td>
+                  <td colspan="2"></td>
+                </tr>
+              </tfoot>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- jQuery & Bootstrap JS -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    function formatRupiah(number) {
+      return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        maximumFractionDigits: 0
+      }).format(number || 0);
+    }
+
+    let globalReportData = [];
+
+    function renderTable(dataset) {
+      console.log(dataset)
+      const $tbody = $('#report-body');
+      $tbody.empty();
+
+      let grandSaldoAwal = 0;
+      let grandInvoice = 0;
+      let grandPaid = 0;
+      let grandResult = 0;
+
+      if (!dataset || dataset.length === 0) {
+        $tbody.append(`
+        <tr>
+          <td colspan="8" class="text-center py-4 text-muted">
+            <i class="bi bi-search me-1"></i> Data supplier tidak ditemukan
+          </td>
+        </tr>
+      `);
+      } else {
+        $.each(dataset, function (index, item) {
+          const saldoAwal = Number(item.saldoAwal || 0);
+          const invoiceTotal = Number(item.invoiceTotal || 0);
+          const paidTotal = Number(item.paidTotal || 0);
+          const resultValue = Number(item.result || 0);
+
+          grandSaldoAwal += saldoAwal;
+          grandInvoice += invoiceTotal;
+          grandPaid += paidTotal;
+          grandResult += resultValue;
+
+          let statusBadge = '';
+          let resultClass = '';
+
+          if (resultValue === 0) {
+            statusBadge = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Lunas</span>';
+          } else if (resultValue > 0) {
+            statusBadge = '<span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill">Sisa Utang</span>';
+          } else {
+            statusBadge = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill">Lebih Bayar</span>';
+            resultClass = 'text-danger fw-bold';
+          }
+
+          const encodedId = encodeURIComponent(item.SupplierID || '');
+          const urlParams = new URLSearchParams(window.location.search);
+          const startDate = urlParams.get('startDate');
+          const endDate = urlParams.get('endDate');
+          const lastPaymentDate = urlParams.get('lastPaymentDate');
+          const dbName = urlParams.get('dbName');
+
+          const row = `
+            <tr>
+              <td class="ps-4 fw-semibold">${item.SupplierName || '-'}</td>
+              <td><code class="text-secondary">${item.SupplierID || '-'}</code></td>
+              <td class="text-end text-muted">
+                 <a href="customer-detail-saldo-awal.html?id=${encodedId}&startDate=${encodeURIComponent(startDate || '')}&lastPaymentDate=${encodeURIComponent(lastPaymentDate || '')}&dbName=${encodeURIComponent(dbName || '')}">
+                      ${formatRupiah(saldoAwal)} <i class="bi bi-box-arrow-up-right"></i>
+                </a> 
+              </td>
+              <td class="text-end fw-semibold">${formatRupiah(invoiceTotal)}</td>
+              <td class="text-end text-success">${formatRupiah(paidTotal)}</td>
+              <td class="text-end ${resultClass}">${formatRupiah(resultValue)}</td>
+              <td class="text-center">${statusBadge}</td>
+              <td class="text-center pe-4">
+                <a href="customer-detail.html?id=${encodedId}&startDate=${encodeURIComponent(startDate || '')}&endDate=${encodeURIComponent(endDate || '')}&lastPaymentDate=${encodeURIComponent(lastPaymentDate || '')}&dbName=${encodeURIComponent(dbName || '')}" class="btn btn-sm btn-outline-primary shadow-sm">
+                    Detail
+                </a>
+              </td>
+            </tr>
+          `;
+          $tbody.append(row);
+        });
+      }
+
+      $('#foot-saldo-awal').text(formatRupiah(grandSaldoAwal));
+      $('#foot-invoice').text(formatRupiah(grandInvoice));
+      $('#foot-paid').text(formatRupiah(grandPaid));
+      $('#foot-result').text(formatRupiah(grandResult));
+
+      $('#search-count').text(`Menampilkan ${dataset ? dataset.length : 0} dari ${globalReportData.length} supplier`);
+    }
+
+    function fetchReportData() {
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const startDate = urlParams.get('startDate');
+      const endDate = urlParams.get('endDate');
+      const lastPaymentDate = urlParams.get('lastPaymentDate');
+      const dbName = urlParams.get('dbName');
+
+
+      const apiUrl = `http://localhost:3000/${dbName}/customer/?startDate=${startDate}&endDate=${endDate}&lastPaymentDate=${lastPaymentDate}`;
+
+      $('#report-body').html(`
+      <tr>
+        <td colspan="8" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <p class="text-muted mt-2 mb-0">Mengambil data dari server...</p>
+        </td>
+      </tr>
+    `);
+
+      $.get(apiUrl)
+        .done(function (response) {
+          const res = typeof response === 'string' ? JSON.parse(response) : response;
+
+          $('#q').text(res.query.reportQuery || '');
+          $('#q0').text(res.query.saldoAwalQuery || '');
+
+          $('#db-name').text(res.requestedDb || 'EpixFIN_RMM');
+          if (res.filter) {
+            $('#report-period').text(`${res.filter.startDate} s/d ${res.filter.endDate}`);
+          }
+
+          globalReportData = res.data || [];
+          $('#stat-total-supplier').text(res.total || globalReportData.length);
+
+          let initialInvoice = globalReportData.reduce((acc, curr) => acc + (curr.invoiceTotal || 0), 0);
+          let initialPaid = globalReportData.reduce((acc, curr) => acc + (curr.paidTotal || 0), 0);
+          let initialResult = globalReportData.reduce((acc, curr) => acc + (curr.result || 0), 0);
+
+          $('#stat-total-invoice').text(formatRupiah(initialInvoice));
+          $('#stat-total-paid').text(formatRupiah(initialPaid));
+          $('#stat-total-result').text(formatRupiah(initialResult));
+
+          renderTable(globalReportData);
+        })
+        .fail(function (jqXHR, textStatus, errorThrown) {
+          console.error('Error fetching data:', textStatus, errorThrown);
+          $('#report-body').html(`
+          <tr>
+            <td colspan="8" class="text-center py-4 text-danger">
+              <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
+              Gagal mengambil data dari server (<code>${apiUrl}</code>).
+            </td>
+          </tr>
+        `);
+        });
+    }
+
+    $(document).ready(function () {
+      fetchReportData();
+
+      $('#search-input').on('keyup input', function () {
+        const keyword = $(this).val().toLowerCase().trim();
+
+        const filteredData = globalReportData.filter(function (item) {
+          return (item.SupplierName && item.SupplierName.toLowerCase().includes(keyword)) ||
+            (item.SupplierID && item.SupplierID.toLowerCase().includes(keyword));
+        });
+
+        renderTable(filteredData);
+      });
+    });
+  </script>
+</body>
+
+</html>

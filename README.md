@@ -141,3 +141,45 @@ If you already have npm but want to update it to the latest version, run:
 ```bash
 npm install -g npm@latest
 ```
+
+
+
+# build Exe
+Langkah 1: Perbaiki Cara Memanggil dotenv di Kode
+
+📁 server-app/
+ ├── 📄 server.exe      <-- Hasil build dari pkg
+ ├── 📄 .env            <-- File konfigurasi (PORT, koneksi MySQL DB, dll)
+ └── 📁 public/         <-- Folder aset publik (gambar/laporan)
+
+```bash
+const path = require('path');
+const dotenv = require('dotenv');
+
+// Pakai process.cwd() agar dotenv membaca file .env di luar / di sebelah server.exe
+dotenv.config({
+  path: path.join(process.cwd(), '.env')
+});
+
+// Contoh pengujian:
+console.log('PORT dari .env:', process.env.PORT);
+console.log('DATABASE_URL:', process.env.DATABASE_URL);
+```
+
+### 1. Install pkg secara global:
+```bash
+npm install -g pkg
+```
+
+
+### 2. Ubah file index.js kamu jadi .exe:
+
+- win 10 11 
+```bash
+pkg index.js -o server.exe --targets node18-win-x64
+```
+
+- win 7
+```bash
+pkg index.js -o server.exe --targets node14-win-x64
+```

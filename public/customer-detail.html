@@ -23,10 +23,21 @@
           Database: <span id="db-name" class="fw-bold text-dark">-</span> | 
           Periode: <span id="report-period" class="fw-bold text-dark">-</span>
         </p>
+        <p>Last Payment: <span id="last-payment" class="fw-bold text-dark">-</span></p>
       </div>
       <button class="btn btn-outline-secondary" onclick="window.print()">
         <i class="bi bi-printer me-1"></i> Cetak Detail
       </button>
+    </div>
+
+    <div class="mb-2 text-end">
+      <a href="#" onclick="$('.query').toggleClass('d-none'); return false;"><small>Show/Hide Queries</small></a>
+    </div>
+    <div class="alert alert-light d-none query" role="alert">
+      <strong>Query Detail:</strong>
+      <code>
+        <pre id="q"></pre>
+      </code>
     </div>
 
     <!-- Summary Cards -->
@@ -122,12 +133,12 @@
 
     // Helper Format Rupiah
     function formatRupiah(number) {
-      if (number === null || number === undefined) return '-';
+      if (number === null || number === undefined) return 0;
       return new Intl.NumberFormat('id-ID', {
-        style: 'currency',
-        currency: 'IDR',
         maximumFractionDigits: 0
       }).format(number);
+
+     
     }
 
     // Helper Format Tanggal ISO ke Lokal (YYYY-MM-DD)
@@ -240,6 +251,8 @@
           if (res.filter) {
             $('#report-period').text(`${res.filter.startDate} s/d ${res.filter.endDate}`);
           }
+          $('#last-payment').text(res.filter.lastPaymentDate || '-');
+          $('#q').text(res.query || '');
 
           $('#stat-total-record').text(res.total || 0);
           if (res.summary) {

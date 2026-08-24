@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Epix Report Launcher</title>
+    <style>
+      body {
+        font-family: Segoe UI, Tahoma, sans-serif;
+        margin: 24px;
+        background: linear-gradient(140deg, #f7f9fc, #eef3ff);
+        color: #1f2937;
+      }
+      .card {
+        max-width: 700px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: 12px;
+        padding: 32px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+      }
+      h1 {
+        margin-top: 0;
+        margin-bottom: 8px;
+      }
+      p {
+        margin-top: 0;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 18px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field.full {
+        grid-column: 1 / -1;
+      }
+      label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #334155;
+      }
+      select,
+      input {
+        border: 1px solid #d0d7e2;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+      select:focus,
+      input:focus {
+        outline: none;
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+      }
+      button {
+        margin-top: 20px;
+        border: 0;
+        border-radius: 10px;
+        background: #2563eb;
+        color: #fff;
+        padding: 11px 16px;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+      .muted {
+        font-size: 13px;
+        color: #6b7280;
+      }
+      .error {
+        margin-top: 12px;
+        color: #b91c1c;
+        font-size: 13px;
+      }
+      .api {
+        margin-top: 18px;
+        font-size: 13px;
+      }
+      .api code {
+        background: #eef2ff;
+        padding: 3px 7px;
+        border-radius: 6px;
+      }
+      @media (max-width: 700px) {
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Epix Report</h1>
+      <p class="muted">Pilih database dan periode, lalu buka laporan utang supplier.</p>
+
+      <form id="launch-form">
+        <div class="form-grid">
+          <div class="field full">
+            <label for="dbSelect">Database</label>
+            <select id="dbSelect" required>
+              <option value="">Memuat daftar database...</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="startDate">Start Date</label>
+            <input id="startDate" type="date" required />
+          </div>
+          <div class="field">
+            <label for="endDate">End Date</label>
+            <input id="endDate" type="date" required />
+          </div>
+          <div class="field full">
+            <label for="lastPaymentDate">Last Payment Date</label>
+            <input id="lastPaymentDate" type="date" required />
+          </div>
+        </div>
+        <button type="submit" id="openBtn">Buka Laporan Customer</button>
+        <div class="error" id="errorBox"></div>
+      </form>
+
+      <div class="api">
+        API list database: <code>GET /databases</code>
+      </div>
+    </div>
+
+    <script>
+      const dbSelect = document.getElementById('dbSelect');
+      const startDateInput = document.getElementById('startDate');
+      const endDateInput = document.getElementById('endDate');
+      const lastPaymentDateInput = document.getElementById('lastPaymentDate');
+      const errorBox = document.getElementById('errorBox');
+      const openBtn = document.getElementById('openBtn');
+      const launchForm = document.getElementById('launch-form');
+
+      function setDefaultDates() {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const firstDay = `${yyyy}-${mm}-01`;
+        const todayStr = `${yyyy}-${mm}-${dd}`;
+
+        startDateInput.value = firstDay;
+        endDateInput.value = todayStr;
+        lastPaymentDateInput.value = todayStr;
+      }
+
+      async function loadDatabases() {
+        errorBox.textContent = '';
+        openBtn.disabled = true;
+
+        try {
+          const response = await fetch('/databases');
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const payload = await response.json();
+          const dbList = Array.isArray(payload.data) ? payload.data : [];
+
+          dbSelect.innerHTML = '';
+          if (!dbList.length) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Database tidak ditemukan';
+            dbSelect.appendChild(option);
+            return;
+          }
+
+          const defaultOption = document.createElement('option');
+          defaultOption.value = '';
+          defaultOption.textContent = '-- Pilih Database --';
+          dbSelect.appendChild(defaultOption);
+
+          dbList.forEach((dbName) => {
+            const option = document.createElement('option');
+            option.value = dbName;
+            option.textContent = dbName;
+            dbSelect.appendChild(option);
+          });
+
+          const preferred = dbList.find((name) => name === 'EpixFIN_RMM');
+          if (preferred) {
+            dbSelect.value = preferred;
+          }
+
+          openBtn.disabled = false;
+        } catch (err) {
+          dbSelect.innerHTML = '<option value="">Gagal memuat database</option>';
+          errorBox.textContent = 'Gagal memuat daftar database dari endpoint /databases. Pastikan server aktif.';
+        }
+      }
+
+      launchForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        errorBox.textContent = '';
+
+        const dbName = dbSelect.value;
+        const startDate = startDateInput.value;
+        const endDate = endDateInput.value;
+        const lastPaymentDate = lastPaymentDateInput.value;
+
+        if (!dbName) {
+          errorBox.textContent = 'Silakan pilih database terlebih dahulu.';
+          return;
+        }
+
+        if (!startDate || !endDate || !lastPaymentDate) {
+          errorBox.textContent = 'Tanggal wajib diisi semua.';
+          return;
+        }
+
+        const targetUrl = `customer.html?dbName=${encodeURIComponent(dbName)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&lastPaymentDate=${encodeURIComponent(lastPaymentDate)}`;
+        window.location.href = targetUrl;
+      });
+
+      setDefaultDates();
+      loadDatabases();
+    </script>
+  </body>
+</html>

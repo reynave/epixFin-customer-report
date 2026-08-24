@@ -27,6 +27,9 @@
           Database: <span id="db-name" class="fw-bold text-dark">-</span> |
           Periode: <span id="report-period" class="fw-bold text-dark">-</span>
         </p>
+        <p>
+          Last Payment: <span id="last-payment" class="fw-bold text-dark">-</span>
+        </p>
       </div>
       <button class="btn btn-outline-secondary" onclick="window.print()">
         <i class="bi bi-printer me-1"></i> Cetak Laporan
@@ -150,11 +153,16 @@
 
   <script>
     function formatRupiah(number) {
+      // return new Intl.NumberFormat('id-ID', {
+      //   style: 'currency',
+      //   currency: 'IDR',
+      //   maximumFractionDigits: 0
+      // }).format(number || 0);
+      if (number === null || number === undefined) return 0;
       return new Intl.NumberFormat('id-ID', {
-        style: 'currency',
-        currency: 'IDR',
         maximumFractionDigits: 0
-      }).format(number || 0);
+      }).format(number);
+     // return number;
     }
 
     let globalReportData = [];
@@ -274,6 +282,7 @@
             $('#report-period').text(`${res.filter.startDate} s/d ${res.filter.endDate}`);
           }
 
+          $('#last-payment').text(res.filter.lastPaymentDate || '-');
           globalReportData = res.data || [];
           $('#stat-total-supplier').text(res.total || globalReportData.length);
 

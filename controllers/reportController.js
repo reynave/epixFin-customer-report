@@ -83,6 +83,7 @@ exports.healthDb = async (req, res) => {
 };
 
 // API report customer - contoh ambil data dengan filter tanggal
+// HARUS PAKAI FinApPaymentDetail.PayAmt
 exports.getReportPage = async (req, res) => {
   const dbName = validateDbNameOrRespond(req, res);
   if (!dbName) return;
@@ -107,17 +108,16 @@ exports.getReportPage = async (req, res) => {
     const pool = await getPool(dbName);
     const q = `
         Declare @startDate DateTime
-	Declare @endDate DateTime
-	Declare @lastPaymentDate DateTime
-	
-	Set @startDate = '${start}'
-	Set @endDate = '${end}'
-	set @lastPaymentDate = '${lastPay}'
+        Declare @endDate DateTime
+        Declare @lastPaymentDate DateTime
+        
+        Set @startDate = '${start}'
+        Set @endDate = '${end}'
+        set @lastPaymentDate = '${lastPay}'
 
       SELECT s.SupplierName, t1.SupplierID, sum(t1.invStart - t1.paidStart) as 'saldoAwal',
- sum(t1.Invoice) as 'invoiceTotal', sum(t1.Payment) as 'paidTotal', 
- 
-          SUM(t1.Invoice - t1.Payment) as 'result'
+         sum(t1.Invoice) as 'invoiceTotal', sum(t1.Payment) as 'paidTotal',  
+          0 as 'result'
         FROM (
           SELECT grn.SupplierID,
                  0 AS invStart,
@@ -156,41 +156,46 @@ exports.getReportPage = async (req, res) => {
       Declare @endDate DateTime
       Declare @lastPaymentDate DateTime
         
-      Set @startDate = '${start}'
-      Set @endDate = '${end}'
-      set @lastPaymentDate = '${lastPay}'
+      Set @startDate = '${start}'  
 
-      select s.SupplierName, t1.SupplierID, 
-      
-      SUM(t1.Invoice - t1.Payment) as 'saldoAwal'
-      from 
-      (
-        select grn.SupplierID, 0 as 'invStart', 0 as 'paidStart', sum(apid.InvAmt) as 'Invoice', 0 as 'Payment'
-        from FinMsGRN as grn
-        left join FinApInvoiceDetail as apid on apid.TranxID = grn.TranxID
-        where CONVERT(VARCHAR(10), grn.ReceivedDate, 23) < @endDate
-        group by grn.SupplierID
+      select s.SupplierName, t.SupplierID, sum(t.APAmount) as 'APAmount', sum(t.paid) as 'Paid' , sum( t.APAmount - t.paid) as 'saldoAwal'
+ 
+ from (
+	 select  pd2.SupplierID, 0 'APAmount',  sum(pd2.PayAmt ) as 'Paid'  
+	 from(
+		select  pd.SupplierID, pd.InvID
+		from FinApPaymentDetail as pd
+			left join FinApPayment as p on p.PaymentID = pd.PaymentID
+			join FinApInvoiceDetail as i on i.InvID = pd.InvID
+			join FinMsGRN as g on g.TranxID = i.TranxID
+		where 
+			p.PaymentDate < @startDate and p.Status = 'CLOSED'
+		
+			group by pd.SupplierID , pd.InvID
+		) as t1 
+	left join FinApPaymentDetail as pd2 on pd2.InvID = t1.InvID
+	group by pd2.SupplierID
 
-        union all
+	union all
 
-        select appd.SupplierID, 0 as 'invStart', 0 as 'paidStart', 0 as 'Invoice', sum(appd.PayAmt) as 'Payment'  
-        from FinApPaymentDetail as appd 
-        left join FinApPayment as app on app.PaymentID = appd.PaymentID
-        where app.PaymentDate <  @lastPaymentDate and app.Status = 'CLOSED'
-        group by appd.SupplierID  
-      ) t1
-      left join FinMsSupplier as s on s.SupplierID = t1.SupplierID
-      group by t1.SupplierID, s.SupplierName
-      order by s.SupplierName;
+	select SupplierID, sum( TotalAmount) 'APAmount' , 0 as 'Paid'
+	from FinMsGRN
+	where ReceivedDate < @startDate
+	group by SupplierID
+	) t 
+	left join FinMsSupplier as s on s.SupplierID = t.SupplierID
+group by t.SupplierID, s.SupplierName
+;
     `; 
-  const result0 = await pool
+  const q_saldoAwal = await pool
       .request() 
       .query(q0);
 
 
   for (const row of result.recordset) {
-    const saldoAwalRow = result0.recordset.find(r => r.SupplierID === row.SupplierID);
+    const saldoAwalRow = q_saldoAwal.recordset.find(r => r.SupplierID === row.SupplierID);
     row.saldoAwal = saldoAwalRow ? saldoAwalRow.saldoAwal : 0;
+    row.result = (row.saldoAwal || 0) + (row.invoiceTotal || 0) - (row.paidTotal || 0);
   } 
  
 
@@ -329,36 +334,30 @@ exports.getReportDetailSaldoAwal = async (req, res) => {
 
     const pool = await getPool(dbName);
     const q = `
-    Declare @startDate DateTime
-    Declare @endDate DateTime
-    Declare @lastPaymentDate DateTime
+    Declare @startDate DateTime 
 
-    Set @startDate = '${startDate}' 
-    set @lastPaymentDate = '${lastPay}'
+    Set @startDate = '${start}' 
+     
+      -- TAGIHAN berdasrkan GRN
+      select g.ReceivedDate 'Date', 'Received' as 'Source', g.TranxID,  g.TotalAmount 'Invoice', 0 as 'Paid' , 'GRN' as 'ID'
+      from FinMsGRN g
+      where g.SupplierID = '${supplierId}' 
+      and g.ReceivedDate < @startDate
 
-    select   t1.* from (
-
-    select  grn.SupplierID,  grn.ReceivedDate, grn.TranxID, apid.InvID, apid.InvAmt as 'Invoice', '' as 'PaymentID', 0 as 'Payment'
-      from FinMsGRN as grn
-      left join FinApInvoiceDetail as apid on apid.TranxID = grn.TranxID
-      where CONVERT(VARCHAR(10), grn.ReceivedDate, 23) < @startDate and 
-      grn.SupplierID = '${supplierId}' 
-      
-      UNION  
-
+      UNION 
+      -- GRN SUDAH DIBAYAR
       select 
-        appd.SupplierID, '' as 'ReceivedDate', '' as 'TranxID',  appd.InvID, 0 as 'Invoice',
-        appd.PaymentID,  
-        appd.PayAmt as 'Payment'  
-    
-      from FinApPaymentDetail as appd 
-      left join FinApPayment as app on app.PaymentID = appd.PaymentID
-
-      where app.PaymentDate  < @lastPaymentDate and app.Status = 'CLOSED'
-      and appd.SupplierID = '${supplierId}' 
-
-    ) as t1
-    order by t1.PaymentID ASC`;
+        p.PaymentDate 'Date', 'Payment' as 'Source', 
+      g.TranxID, 0 as 'Invoice',    g.TotalAmount 'Paid' , appd.PaymentID as 'Source'
+        
+      from FinMsGRN as g
+      join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
+      join FinApPaymentDetail as appd on apid.InvID = appd.InvID
+      left join FinApPayment as p on p.PaymentID = appd.PaymentID
+      where g.SupplierID = '${supplierId}'
+      and 	p.PaymentDate < @startDate
+      order by TranxID DESC
+     `;
     const result = await pool.query(q);
       
     return res.json({
@@ -369,8 +368,8 @@ exports.getReportDetailSaldoAwal = async (req, res) => {
       total: result.recordset.length,
       summary : {
         totalInvoice: result.recordset.reduce((sum, row) => sum + (row.Invoice || 0), 0),
-        totalPayment: result.recordset.reduce((sum, row) => sum + (row.Payment || 0), 0),
-        totalBalance: result.recordset.reduce((sum, row) => sum + ((row.Invoice || 0) - (row.Payment || 0)), 0),
+        totalPayment: result.recordset.reduce((sum, row) => sum + (row.Paid || 0), 0),
+        totalBalance: result.recordset.reduce((sum, row) => sum + ((row.Invoice || 0) - (row.Paid || 0)), 0),
       },
  data: result.recordset,
       query: q,

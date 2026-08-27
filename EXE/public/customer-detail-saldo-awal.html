@@ -97,10 +97,10 @@
           <table class="table table-hover align-middle mb-0" id="detail-table">
             <thead class="table-light">
               <tr>
-                <th scope="col" class="ps-4">Tanggal Terima</th>
+                <th scope="col" class="ps-4">Tanggal</th>
+                <th scope="col">Source</th>
                 <th scope="col">Tranx ID</th>
-                <th scope="col">Inv ID</th>
-                <th scope="col">Payment ID</th>
+                <th scope="col">GRN / Payment ID</th>
                 <th scope="col" class="text-end">Invoice (Rp)</th>
                 <th scope="col" class="text-end pe-4">Payment (Rp)</th>
               </tr>
@@ -179,17 +179,15 @@
       } else {
         $.each(dataset, function(index, item) {
           const invAmt = item.Invoice || 0;
-          const payAmt = item.Payment || 0;
-
-          // Menggunakan ReceivedDate dari payload JSON Saldo Awal
-          const rxDate = item.ReceivedDate || item.ReceiverDate;
+          const payAmt = item.Paid || 0;
+          const isPayment = item.Source === 'Payment';
 
           const row = `
             <tr>
-              <td class="ps-4">${formatDate(rxDate)}</td>
+              <td class="ps-4">${formatDate(item.Date)}</td>
+              <td><span class="badge ${isPayment ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-primary-subtle text-primary border border-primary-subtle'}">${item.Source || '-'}</span></td>
               <td><code class="text-dark">${item.TranxID || '-'}</code></td>
-              <td><span class="badge bg-light text-dark border">${item.InvID || '-'}</span></td>
-              <td>${item.PaymentID ? `<span class="badge bg-success-subtle text-success border border-success-subtle">${item.PaymentID}</span>` : '<span class="text-muted">-</span>'}</td>
+              <td><span class="badge bg-light text-dark border">${item.ID || '-'}</span></td>
               <td class="text-end fw-semibold">${invAmt > 0 ? formatRupiah(invAmt) : '-'}</td>
               <td class="text-end pe-4 text-success fw-semibold">${payAmt > 0 ? formatRupiah(payAmt) : '-'}</td>
             </tr>
@@ -270,8 +268,8 @@
 
         const filteredData = globalDetailData.filter(function(item) {
           return (item.TranxID && item.TranxID.toLowerCase().includes(keyword)) ||
-                 (item.InvID && item.InvID.toLowerCase().includes(keyword)) ||
-                 (item.PaymentID && item.PaymentID.toLowerCase().includes(keyword));
+                 (item.ID && String(item.ID).toLowerCase().includes(keyword)) ||
+                 (item.Source && item.Source.toLowerCase().includes(keyword));
         });
 
         renderTable(filteredData);

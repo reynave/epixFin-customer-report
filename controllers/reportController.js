@@ -152,40 +152,31 @@ exports.getReportPage = async (req, res) => {
 
 
     const q0 = `
-      Declare @startDate DateTime
-      Declare @endDate DateTime
-      Declare @lastPaymentDate DateTime
+      Declare @startDate DateTime 
         
       Set @startDate = '${start}'  
 
-      select s.SupplierName, t.SupplierID, sum(t.APAmount) as 'APAmount', sum(t.paid) as 'Paid' , sum( t.APAmount - t.paid) as 'saldoAwal'
- 
- from (
-	 select  pd2.SupplierID, 0 'APAmount',  sum(pd2.PayAmt ) as 'Paid'  
-	 from(
-		select  pd.SupplierID, pd.InvID
-		from FinApPaymentDetail as pd
-			left join FinApPayment as p on p.PaymentID = pd.PaymentID
-			join FinApInvoiceDetail as i on i.InvID = pd.InvID
-			join FinMsGRN as g on g.TranxID = i.TranxID
-		where 
-			p.PaymentDate < @startDate and p.Status = 'CLOSED'
-		
-			group by pd.SupplierID , pd.InvID
-		) as t1 
-	left join FinApPaymentDetail as pd2 on pd2.InvID = t1.InvID
-	group by pd2.SupplierID
+      select t1.SupplierID, sum(t1.Invoice - t1.Paid) 'saldoAwal' from (
 
-	union all
+        -- TAGIHAN berdasrkan GRN
+        select g.SupplierID , g.ReceivedDate 'Date',  g.TranxID,  g.TotalAmount 'Invoice', 0 as 'Paid' , 'GRN' as 'ID'
+        from FinMsGRN g
+        where g.ReceivedDate < @startDate 
 
-	select SupplierID, sum( TotalAmount) 'APAmount' , 0 as 'Paid'
-	from FinMsGRN
-	where ReceivedDate < @startDate
-	group by SupplierID
-	) t 
-	left join FinMsSupplier as s on s.SupplierID = t.SupplierID
-group by t.SupplierID, s.SupplierName
-;
+        UNION 
+        -- GRN SUDAH DIBAYAR
+        select g.SupplierID,
+          p.PaymentDate 'Date',
+        g.TranxID, 0 as 'Invoice',    g.TotalAmount 'Paid' , appd.PaymentID as 'Source'
+          
+        from FinMsGRN as g
+        join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
+        join FinApPaymentDetail as appd on apid.InvID = appd.InvID
+        left join FinApPayment as p on p.PaymentID = appd.PaymentID
+        where  	p.PaymentDate < @startDate
+      ) t1
+      group by t1.SupplierID
+      order by t1.SupplierID 
     `; 
   const q_saldoAwal = await pool
       .request() 

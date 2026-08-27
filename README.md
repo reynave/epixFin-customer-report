@@ -176,10 +176,10 @@ npm install -g pkg
 
 - win 10 11 
 ```bash
-pkg index.js -o server.exe --targets node18-win-x64
+pkg app.js -o app.exe --targets node18-win-x64
 ```
 
 - win 7
 ```bash
-pkg index.js -o server.exe --targets node14-win-x64
+pkg app.js -o app-win7x64.exe --targets node14-win-x64
 ```

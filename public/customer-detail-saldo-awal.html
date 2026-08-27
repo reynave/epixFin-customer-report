@@ -24,9 +24,14 @@
           Per Tanggal: <span id="report-period" class="fw-bold text-dark">-</span>
         </p>
       </div>
-      <button class="btn btn-outline-secondary" onclick="window.print()">
-        <i class="bi bi-printer me-1"></i> Cetak Detail
-      </button>
+      <div class="d-flex gap-2 ms-auto">
+        <button class="btn btn-dark" onclick="window.print()">
+          <i class="bi bi-printer me-1"></i> Cetak Detail
+        </button>
+        <button class="btn btn-primary" onclick="exportToExcel()">
+          <i class="bi bi-printer me-1"></i> Export *.xlsx
+        </button>
+      </div>
     </div>
 
     <div class="mb-2 text-end">
@@ -124,6 +129,7 @@
   <!-- jQuery & Bootstrap JS -->
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
   <script>
     let globalDetailData = [];
@@ -161,6 +167,40 @@
       const urlParams = new URLSearchParams(window.location.search);
       const value = urlParams.get(name);
       return value || fallback;
+    }
+
+    function exportToExcel() {
+      if (!globalDetailData.length) {
+        alert('Tidak ada data transaksi untuk diexport.');
+        return;
+      }
+
+      const exportData = globalDetailData.map(function(item) {
+        return {
+          Tanggal: item.Date ? new Date(item.Date) : '',
+          Source: item.Source || '',
+          'Tranx ID': item.TranxID || '',
+          'GRN / Payment ID': item.ID || '',
+          'Invoice (Rp)': Number(item.Invoice) || 0,
+          'Payment (Rp)': Number(item.Paid) || 0
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      worksheet['!cols'] = [
+        { wch: 14 },
+        { wch: 12 },
+        { wch: 20 },
+        { wch: 22 },
+        { wch: 18 },
+        { wch: 18 }
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Saldo Awal');
+
+      const supplierId = getSupplierIdFromUrl().replace(/[^a-z0-9_-]/gi, '_');
+      XLSX.writeFile(workbook, `detail-saldo-awal-${supplierId}.xlsx`);
     }
 
     // Function Render Tabel Detail

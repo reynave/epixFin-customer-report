@@ -13,7 +13,7 @@
 
   <div class="container my-2">
     <!-- Header Navigation & Action -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center">
       <div>
         <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm mb-2 shadow-sm">
           <i class="bi bi-arrow-left me-1"></i> Kembali ke Laporan
@@ -47,7 +47,7 @@
 
     <!-- Summary Cards -->
     <div class="row g-3 mb-4">
-      <div class="col-md-3">
+      <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
             <span class="text-muted small fw-medium">Total Record</span>
@@ -55,7 +55,15 @@
           </div>
         </div>
       </div>
-      <div class="col-md-3">
+          <div class="col">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body">
+            <span class="text-muted small fw-medium">Total Saldo Awal</span>
+            <h3 class="fw-bold text-dark mt-2 mb-0" id="stat-total-saldo-awal">Rp 0</h3>
+          </div>
+        </div>
+      </div>
+      <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
             <span class="text-muted small fw-medium">Total Invoice (Tagihan)</span>
@@ -63,18 +71,20 @@
           </div>
         </div>
       </div>
-      <div class="col-md-3">
+   
+      
+      <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <span class="text-muted small fw-medium">Total Payment (Pembayaran)</span>
+            <span class="text-muted small fw-medium">Total Payment</span>
             <h3 class="fw-bold text-success mt-2 mb-0" id="stat-total-payment">Rp 0</h3>
           </div>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <span class="text-muted small fw-medium">Sisa Saldo (Balance)</span>
+            <span class="text-muted small fw-medium">Sisa Saldo</span>
             <h3 class="fw-bold text-danger mt-2 mb-0" id="stat-total-balance">Rp 0</h3>
           </div>
         </div>
@@ -129,6 +139,39 @@
     </div>
   </div>
 
+  <!-- Modal Riwayat Tranx ID -->
+  <div class="modal fade" id="historyModal" tabindex="-1" aria-labelledby="historyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="historyModalLabel">History Tranx ID</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+              <thead class="table-light">
+                <tr> 
+                  <th>Tanggal diterima</th>
+                  <th>Tranx ID</th>
+                  <th>Inv ID</th> 
+                  <th class="text-end">Inv Amt (Rp)</th>
+                </tr>
+              </thead>
+              <tbody id="history-modal-body"></tbody>
+              <tfoot class="table-group-divider fw-bold bg-light">
+                <tr>
+                  <td colspan="3">TOTAL</td>
+                  <td class="text-end" id="history-modal-total">Rp 0</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- jQuery & Bootstrap JS -->
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -136,6 +179,38 @@
 
   <script>
     let globalDetailData = [];
+    let historyStore = [];
+
+    function showHistoryModal(idx) {
+      const records = historyStore[idx] || [];
+      const $body = $('#history-modal-body');
+      $body.empty();
+
+      let totalInvAmt = 0;
+
+      if (!records.length) {
+        $body.append(`<tr><td colspan="4" class="text-center text-muted py-3">Tidak ada riwayat</td></tr>`);
+      } else {
+        records.forEach(function(h) {
+          totalInvAmt += Number(h.InvAmt) || 0;
+          $body.append(`
+            <tr>
+              
+              <td>${formatDate(h.ReceiverDate)}</td>
+              <td><code>${h.TranxID || '-'}</code></td>
+              <td>${h.InvID || '-'}</td>
+            
+              <td class="text-end">${formatRupiah(h.InvAmt)}</td>
+            </tr>
+          `);
+        });
+      }
+
+      $('#history-modal-total').text(formatRupiah(totalInvAmt));
+
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('historyModal'));
+      modal.show();
+    }
 
     // Helper Format Rupiah
     function formatRupiah(number) {
@@ -182,7 +257,7 @@
 
       const exportData = globalDetailData.map(function(item) {
         return {
-          'Tanggal Terima': item.ReceiverDate ? new Date(item.ReceiverDate) : '',
+          'Tanggal Terima': item.ReceivedDate ? new Date(item.ReceivedDate) : '',
           'Tranx ID': item.TranxID || '',
           'Inv ID': item.InvID || '',
           'Payment ID': item.PaymentID || '',
@@ -214,6 +289,7 @@
     function renderTable(dataset) {
       const $tbody = $('#detail-body');
       $tbody.empty();
+      historyStore = [];
 
       let calcInvoice = 0;
       let calcPayment = 0;
@@ -242,12 +318,19 @@
 
           const row = `
             <tr>
-              <td class="ps-4">${formatDate(item.ReceiverDate)}</td>
-              <td><code class="text-dark">${item.TranxID || '-'}</code></td>
+              <td class="ps-4">${formatDate(item.ReceivedDate)}</td>
+     
+              <td><code class="text-dark">${item.TranxID}</code>
+                ${item.historyTranxID && item.historyTranxID.length > 0 ? (function() {
+                  const histIdx = historyStore.length;
+                  historyStore.push(item.historyTranxID);
+                  return `<button type="button" class="btn btn-link btn-sm p-0 d-block" onclick="showHistoryModal(${histIdx})"><i class="bi bi-clock-history me-1"></i>History (${item.historyTranxID.length})</button>`;
+                })() : ''}
+                </td>
               <td><span class="badge bg-light text-dark border">${item.InvID || '-'}</span></td>
               <td>${item.PaymentID ? `<span class="badge bg-success-subtle text-success border border-success-subtle">${item.PaymentID}</span>` : '<span class="text-muted">-</span>'}</td>
-              <td class="text-end fw-semibold">${invAmt > 0 ? formatRupiah(invAmt) : '-'}</td>
-              <td class="text-end text-success fw-semibold">${payAmt > 0 ? formatRupiah(payAmt) : '-'}</td>
+              <td class="text-end fw-semibold">${formatRupiah(invAmt)}</td>
+              <td class="text-end text-success fw-semibold">${formatRupiah(payAmt)}</td>
               <td class="text-end pe-4 ${balanceClass}">${formatRupiah(balAmt)}</td>
             </tr>
           `;
@@ -298,6 +381,7 @@
 
           $('#stat-total-record').text(res.total || 0);
           if (res.summary) {
+            $('#stat-total-saldo-awal').text(formatRupiah(res.summary.totalSaldoAwal));
             $('#stat-total-invoice').text(formatRupiah(res.summary.totalInvoice));
             $('#stat-total-payment').text(formatRupiah(res.summary.totalPayment));
             $('#stat-total-balance').text(formatRupiah(res.summary.totalBalance));

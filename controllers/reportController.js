@@ -97,17 +97,19 @@ function QuerySaldoAwal(start = '2026-01-01' ){
         from FinMsGRN g
         where g.ReceivedDate < @startDate 
 
-        UNION 
-        -- GRN SUDAH DIBAYAR
+         UNION ALL 
+       -- GRN SUDAH DIBAYAR (1 baris per TranxID, tidak dobel walau invoice/payment detail-nya banyak)
         select g.SupplierID,
-          p.PaymentDate 'Date',
-        g.TranxID, 0 as 'Invoice',    g.TotalAmount 'Paid' , appd.PaymentID as 'Source'
-          
+          MAX(p.PaymentDate) as 'Date',
+          g.TranxID, 0 as 'Invoice', g.TotalAmount as 'Paid', 
+          MIN(CAST(appd.PaymentID as varchar(20))) as 'ID'
         from FinMsGRN as g
         join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
         join FinApPaymentDetail as appd on apid.InvID = appd.InvID
         left join FinApPayment as p on p.PaymentID = appd.PaymentID
-        where  	p.PaymentDate < @startDate
+        where p.PaymentDate < @startDate
+        group by g.SupplierID, g.TranxID, g.TotalAmount
+
       ) t1
       group by t1.SupplierID
       order by t1.SupplierID 
@@ -269,7 +271,7 @@ exports.getReportDetail = async (req, res) => {
           where CONVERT(VARCHAR(10), grn.ReceivedDate, 23) between @startDate and @endDate and 
             grn.SupplierID = @supplierId  
         
-          union 
+           UNION ALL 
 
           select 
             appd.SupplierID, '' as 'TranxID', ( 
@@ -294,36 +296,37 @@ exports.getReportDetail = async (req, res) => {
 
 
      const q0 = `
-     -- SALDO AWAL
-      Declare @startDate DateTime 
-          Declare @supplierId varchar(50)   
+    -- SALDO AWAL
+Declare @startDate DateTime 
+Declare @supplierId varchar(50)   
 
-        Set @supplierId = '${supplierId}'
-      Set @startDate = '${start}'  
+Set @supplierId = '${supplierId}'
+Set @startDate = '${start}'  
 
-      select t1.SupplierID, sum(t1.Invoice - t1.Paid) 'saldoAwal' from (
+select t1.SupplierID, sum(t1.Invoice - t1.Paid) as 'saldoAwal' from (
 
-        -- TAGIHAN berdasrkan GRN
-        select g.SupplierID , g.ReceivedDate 'Date',  g.TranxID,  g.TotalAmount 'Invoice', 0 as 'Paid' , 'GRN' as 'ID'
-        from FinMsGRN g
-        where g.ReceivedDate < @startDate  and g.SupplierID = @supplierId
+    -- TAGIHAN berdasarkan GRN
+    select g.SupplierID, g.ReceivedDate as 'Date', g.TranxID, g.TotalAmount as 'Invoice', 0 as 'Paid', 'GRN' as 'ID'
+    from FinMsGRN g
+    where g.ReceivedDate < @startDate and g.SupplierID = @supplierId
 
-        UNION 
-        -- GRN SUDAH DIBAYAR
-        select g.SupplierID,
-          p.PaymentDate 'Date',
-        g.TranxID, 0 as 'Invoice',    g.TotalAmount 'Paid' , appd.PaymentID as 'Source'
-          
-        from FinMsGRN as g
-        join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
-        join FinApPaymentDetail as appd on apid.InvID = appd.InvID
-        left join FinApPayment as p on p.PaymentID = appd.PaymentID
-        where  	p.PaymentDate < @startDate
-        and g.SupplierID = @supplierId
-      ) t1
-      group by t1.SupplierID 
-      order by t1.SupplierID
-      
+    UNION ALL 
+    -- GRN SUDAH DIBAYAR (1 baris per TranxID, TotalAmount tidak dobel)
+    select g.SupplierID,
+      MAX(p.PaymentDate) as 'Date',
+      g.TranxID, 0 as 'Invoice', g.TotalAmount as 'Paid', 
+      MIN(CAST(appd.PaymentID as varchar(20))) as 'ID'
+    from FinMsGRN as g
+    join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
+    join FinApPaymentDetail as appd on apid.InvID = appd.InvID
+    left join FinApPayment as p on p.PaymentID = appd.PaymentID
+    where p.PaymentDate < @startDate
+    and g.SupplierID = @supplierId
+    group by g.SupplierID, g.TranxID, g.TotalAmount
+
+) t1
+group by t1.SupplierID 
+order by t1.SupplierID
     `; 
     const q_saldoAwal = await pool
       .request() 
@@ -548,23 +551,32 @@ exports.getReportDetailSaldoAwal = async (req, res) => {
      
       -- TAGIHAN berdasrkan GRN
       select g.ReceivedDate 'Date', 'Received' as 'Source', g.TranxID,  g.TotalAmount 'Invoice', 0 as 'Paid' , 'GRN' as 'ID'
-      from FinMsGRN g
+        from FinMsGRN g
       where g.SupplierID = '${supplierId}' 
       and g.ReceivedDate < @startDate
 
       UNION 
       -- GRN SUDAH DIBAYAR
-      select 
-        p.PaymentDate 'Date', 'Payment' as 'Source', 
-      g.TranxID, 0 as 'Invoice',    g.TotalAmount 'Paid' , appd.PaymentID as 'Source'
-        
-      from FinMsGRN as g
-      join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
-      join FinApPaymentDetail as appd on apid.InvID = appd.InvID
-      left join FinApPayment as p on p.PaymentID = appd.PaymentID
-      where g.SupplierID = '${supplierId}'
-      and 	p.PaymentDate < @startDate
-      order by TranxID DESC
+     select Date, Source, TranxID, Invoice, Paid, PaymentID
+from (
+	select 
+		p.PaymentDate as 'Date', 
+		'Payment' as 'Source', 
+		g.TranxID, 
+		0 as 'Invoice',    
+		g.TotalAmount as 'Paid',   
+		appd.PaymentID,
+		ROW_NUMBER() OVER (PARTITION BY g.TranxID ORDER BY p.PaymentDate DESC) as rn
+	from FinMsGRN as g
+		join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
+		join FinApPaymentDetail as appd on apid.InvID = appd.InvID
+		left join FinApPayment as p on p.PaymentID = appd.PaymentID
+	where g.SupplierID = '${supplierId}'
+		and p.PaymentDate < @startDate  
+) t
+where rn = 1 
+
+        order by TranxID DESC
      `;
     const result = await pool.query(q);
       
@@ -579,7 +591,7 @@ exports.getReportDetailSaldoAwal = async (req, res) => {
         totalPayment: result.recordset.reduce((sum, row) => sum + (row.Paid || 0), 0),
         totalBalance: result.recordset.reduce((sum, row) => sum + ((row.Invoice || 0) - (row.Paid || 0)), 0),
       },
- data: result.recordset,
+      data: result.recordset,
       query: q,
     });
   }

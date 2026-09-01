@@ -61,7 +61,7 @@
 
     <!-- Summary Cards -->
     <div class="row g-3 mb-4">
-      <div class="col-md-3">
+      <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
             <span class="text-muted small fw-medium">Total Supplier</span>
@@ -69,7 +69,15 @@
           </div>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body">
+            <span class="text-muted small fw-medium">Total Saldo Awal</span>
+            <h3 class="fw-bold text-primary mt-2 mb-0" id="stat-total-saldo-awal">Rp 0</h3>
+          </div>
+        </div>
+      </div>
+      <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
             <span class="text-muted small fw-medium">Total Invoice (Tagihan)</span>
@@ -77,7 +85,7 @@
           </div>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
             <span class="text-muted small fw-medium">Total Terbayar (Paid)</span>
@@ -85,7 +93,7 @@
           </div>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
             <span class="text-muted small fw-medium">Sisa Utang (Net Result)</span>
@@ -333,9 +341,13 @@
           let initialPaid = globalReportData.reduce((acc, curr) => acc + (curr.paidTotal || 0), 0);
           let initialResult = initialInvoice - initialPaid;
 
+   
+
+          let initialSaldoAwal = (res.summary && res.summary.totalSaldoAwal) || globalReportData.reduce((acc, curr) => acc + (curr.saldoAwal || 0), 0);
+          $('#stat-total-saldo-awal').text(formatRupiah(initialSaldoAwal));
           $('#stat-total-invoice').text(formatRupiah(initialInvoice));
           $('#stat-total-paid').text(formatRupiah(initialPaid));
-          $('#stat-total-result').text(formatRupiah(initialResult));
+          $('#stat-total-result').text(formatRupiah(res.summary && res.summary.totalBalance || initialResult));
 
           renderTable(globalReportData);
         })

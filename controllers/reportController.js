@@ -201,16 +201,16 @@ exports.getReportPage = async (req, res) => {
    
   } 
  
-
+  let totalSaldoAwal = result.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
     return res.json({ 
       requestedDb: dbName, 
       filter : { startDate: start, endDate: end, lastPaymentDate: lastPay },
       total: result.recordset.length,
       summary : {
-        totalSaldoAwal: result.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0),
+        totalSaldoAwal: totalSaldoAwal,
         totalInvoice: result.recordset.reduce((sum, row) => sum + (row.invoiceTotal || 0), 0),
         totalPayment: result.recordset.reduce((sum, row) => sum + (row.paidTotal || 0), 0),
-        totalBalance: result.recordset.reduce((sum, row) => sum + ((row.invoiceTotal || 0) - (row.paidTotal || 0)), 0),
+        totalBalance: totalSaldoAwal + result.recordset.reduce((sum, row) => sum + ((row.invoiceTotal || 0) - (row.paidTotal || 0)), 0),
       },
       data: result.recordset,
       query: {
@@ -444,41 +444,20 @@ exports.getReportDetailAll = async (req, res) => {
 
       `;  
     const result = await pool.query(q);
-    let totalSaldoAwal = 0;
+   
 
 
-     const q0 = `
-     -- SALDO AWAL
-      Declare @startDate DateTime  
-      Set @startDate = '${start}'  
-
-      select t1.SupplierID, sum(t1.Invoice - t1.Paid) 'saldoAwal' from (
-
-        -- TAGIHAN berdasrkan GRN
-        select g.SupplierID , g.ReceivedDate 'Date',  g.TranxID,  g.TotalAmount 'Invoice', 0 as 'Paid' , 'GRN' as 'ID'
-        from FinMsGRN g
-        where g.ReceivedDate < @startDate   
-
-        UNION 
-        -- GRN SUDAH DIBAYAR
-        select g.SupplierID,
-          p.PaymentDate 'Date',
-        g.TranxID, 0 as 'Invoice',    g.TotalAmount 'Paid' , appd.PaymentID as 'Source'
-          
-        from FinMsGRN as g
-        join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
-        join FinApPaymentDetail as appd on apid.InvID = appd.InvID
-        left join FinApPayment as p on p.PaymentID = appd.PaymentID
-        where  	p.PaymentDate < @startDate 
-      ) t1
-      group by t1.SupplierID 
-      order by t1.SupplierID
-      
-    `; 
+     const q0 = QuerySaldoAwal(start);
+    
     const q_saldoAwal = await pool
       .request() 
       .query(q0);
-    totalSaldoAwal = q_saldoAwal.recordset.length > 0 ? q_saldoAwal.recordset[0].saldoAwal : 0;
+    
+    // Create a map of SupplierID -> saldoAwal for quick lookup
+    const saldoAwalMap = {};
+    q_saldoAwal.recordset.forEach(row => {
+      saldoAwalMap[row.SupplierID] = row.saldoAwal;
+    });
 
     for( const row of result.recordset) {
       if(row.TranxID === null || row.TranxID === undefined || row.TranxID === '') {
@@ -497,6 +476,9 @@ exports.getReportDetailAll = async (req, res) => {
       }
     }
 
+    // Calculate total saldo awal per unique supplier
+    const uniqueSuppliers = [...new Set(result.recordset.map(r => r.SupplierID))];
+    let totalSaldoAwal = uniqueSuppliers.reduce((sum, suppId) => sum + (saldoAwalMap[suppId] || 0), 0);
 
 
 

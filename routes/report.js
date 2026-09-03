@@ -27,6 +27,8 @@ router.get('/', (req, res) => {
  
 router.get('/customer', reportController.getReportPage); 
 router.get('/customer/detail', reportController.getReportDetail);
+router.get('/customer/unInvoiceGrn', reportController.getUninvoiceGrn);
+
 router.get('/customer/detail/all', reportController.getReportDetailAll);
 
 router.get('/customer/detail/saldo-awal', reportController.getReportDetailSaldoAwal);

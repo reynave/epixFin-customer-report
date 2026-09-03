@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UnInvoice GRN List</title>
+  <!-- Bootstrap 5 CSS (dipakai untuk toolbar & search saja) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .print-page {
+      background: #fff;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 32px;
+      font-family: 'Courier New', Consolas, monospace;
+      font-size: 13px;
+      color: #000;
+    }
+    .print-page h1 {
+      font-size: 15px;
+      font-weight: bold;
+      margin: 0 0 2px 0;
+    }
+    .print-page .company-address {
+      font-size: 12px;
+      margin: 0 0 14px 0;
+    }
+    .print-page .report-title {
+      font-size: 15px;
+      font-weight: bold;
+      text-decoration: underline;
+      margin: 0 0 10px 0;
+    }
+    .meta-table {
+      width: 100%;
+      font-size: 12px;
+      margin-bottom: 10px;
+      border-collapse: collapse;
+    }
+    .meta-table td {
+      padding: 1px 4px 1px 0;
+      vertical-align: top;
+    }
+    .meta-label {
+      width: 70px;
+    }
+    .meta-sep {
+      width: 12px;
+    }
+    .grn-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .grn-table thead th {
+      border-top: 2px solid #000;
+      border-bottom: 1px solid #000;
+      padding: 4px 6px;
+      text-align: left;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+    .grn-table th.text-end,
+    .grn-table td.text-end {
+      text-align: right;
+    }
+    .supplier-group-row td {
+      font-weight: bold;
+      padding: 8px 6px 3px 6px;
+      border-bottom: 1px solid #000;
+    }
+    .grn-table tbody td {
+      padding: 2px 6px;
+    }
+    .subtotal-row td {
+      border-top: 1px solid #000;
+      font-weight: bold;
+      padding: 3px 6px 10px 6px;
+    }
+    @media print {
+      .d-print-none {
+        display: none !important;
+      }
+      body {
+        background: #fff;
+      }
+      .print-page {
+        max-width: none;
+        padding: 0;
+      }
+      .supplier-group {
+        break-inside: avoid;
+      }
+    }
+    tr th{
+        border-bottom: 2px solid #000;
+        border-top: 2px solid #000;
+        background-color: #fff;
+    }
+  </style>
+</head>
+
+<body class="bg-light">
+
+  <div class="container my-2 d-print-none">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm shadow-sm">
+          <i class="bi bi-arrow-left me-1"></i> Kembali ke Laporan
+        </a>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <div class="input-group input-group-sm" style="width: 260px;">
+          <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+          <input type="text" id="search-input" class="form-control" placeholder="Cari Nama atau ID Supplier...">
+        </div>
+        <button class="btn btn-outline-secondary" onclick="window.print()">
+          <i class="bi bi-printer me-1"></i> Cetak
+        </button>
+        <button class="btn btn-primary" onclick="exportToExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i> Export *.xlsx
+        </button>
+      </div>
+    </div>
+    <div class="text-end mt-1">
+      <span class="text-muted small" id="search-count">Menampilkan seluruh data</span>
+    </div>
+  </div>
+
+  <div class="print-page shadow-sm">
+    <h1 id="company-name">PT NAMA PERUSAHAAN</h1>
+    <p class="company-address" id="company-address">Alamat Perusahaan</p>
+    <p class="report-title">UnInvoiceGRNList</p>
+
+    <table class="meta-table">
+      <tr>
+        <td class="meta-label">Period</td>
+        <td class="meta-sep">:</td>
+        <td id="report-period">-</td>
+        <td class="meta-label text-end">Date</td>
+        <td class="meta-sep">:</td>
+        <td id="report-date">-</td>
+      </tr>
+      <tr>
+        <td class="meta-label">Supplier</td>
+        <td class="meta-sep">:</td>
+        <td id="report-supplier">ALL</td>
+        <td class="meta-label text-end">Time</td>
+        <td class="meta-sep">:</td>
+        <td id="report-time">-</td>
+      </tr>
+      <tr>
+        <td class="meta-label">Database</td>
+        <td class="meta-sep">:</td>
+        <td id="db-name">-</td>
+        <td class="meta-label text-end">Page</td>
+        <td class="meta-sep">:</td>
+        <td id="report-page">-</td>
+      </tr>
+    </table>
+
+    <table class="grn-table">
+       
+      <tbody id="report-body">
+        <!-- Data supplier dimuat di sini -->
+      </tbody>
+    </table>
+  </div>
+
+  <div class="my-3 text-muted text-center small d-print-none">
+    <small>Ver 1.260903.0</small>
+  </div>
+
+  <!-- jQuery & Bootstrap JS -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+  <script>
+    let globalReportData = [];
+
+    function formatRupiah(number) {
+      if (number === null || number === undefined) return 0;
+      return new Intl.NumberFormat('id-ID', {
+        maximumFractionDigits: 0
+      }).format(number);
+    }
+
+    function formatDate(dateString) {
+      if (!dateString) return '-';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    }
+
+    function getDbNameFromUrl() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('dbName') || 'EpixFIN_RMM';
+    }
+
+    function getDateParam(name, fallback = '') {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name) || fallback;
+    }
+
+    function exportToExcel() {
+      if (!globalReportData.length) {
+        alert('Tidak ada data supplier untuk diexport.');
+        return;
+      }
+
+      const exportData = [];
+      globalReportData.forEach(function(supplier) {
+        (supplier.recordset || []).forEach(function(row) {
+          exportData.push({
+            'ID Supplier': supplier.supplierId || '',
+            'Nama Supplier': supplier.supplierName || '',
+            'No': row.no || '',
+            'Type': row.type || '',
+            'Status': row.Status || '',
+            'Tanggal': row.ReceivedDate ? new Date(row.ReceivedDate) : '',
+            'Amount': row.type === 'GRN' ? (Number(row.TotalAmount) || 0) : (Number(row.InvAmt) || 0)
+          });
+        });
+        exportData.push({
+          'ID Supplier': supplier.supplierId || '',
+          'Nama Supplier': 'Invoiced Amount',
+          'No': '', 'Type': '', 'Status': '', 'Tanggal': '',
+          'Amount': Number(supplier.summary?.InvAmt) || 0
+        });
+        exportData.push({
+          'ID Supplier': supplier.supplierId || '',
+          'Nama Supplier': 'Uninvoiced Amount',
+          'No': '', 'Type': '', 'Status': '', 'Tanggal': '',
+          'Amount': Number(supplier.summary?.unInvoice) || 0
+        });
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      worksheet['!cols'] = [
+        { wch: 16 }, { wch: 30 }, { wch: 18 }, { wch: 8 },
+        { wch: 14 }, { wch: 14 }, { wch: 18 }
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'GRN Uninvoiced');
+
+      const dbName = getDbNameFromUrl().replace(/[^a-z0-9_-]/gi, '_');
+      XLSX.writeFile(workbook, `laporan-grn-uninvoiced-${dbName}.xlsx`);
+    }
+
+    function renderReport(dataset) {
+      const $body = $('#report-body');
+      $body.empty();
+
+      if (!dataset || dataset.length === 0) {
+        $body.append(`<tr><td colspan="7" class="text-center py-4 text-muted">Data tidak ditemukan</td></tr>`);
+        $('#search-count').text(`Menampilkan 0 dari ${globalReportData.length} supplier`);
+        return;
+      }
+
+      dataset.forEach(function(supplier) {
+        const summary = supplier.summary || {};
+        const invoicedAmount = Number(summary.InvAmt || 0);
+        const uninvoicedAmount = Number(summary.unInvoice || 0);
+
+        $body.append(`
+          <tr class="supplier-group">
+            <td colspan="7" class="supplier-group-row">
+              <div class='mt-2' >
+                  <h5>${supplier.supplierId || '-'} - ${supplier.supplierName || '-'}</h5>
+              </div>
+            </td>
+          </tr>
+
+          
+        <tr class='sticky-top'>
+          <th style="width:23%">No</th>
+          <th style="width:9%">Type</th>
+          <th style="width:11%">Status</th>
+          <th style="width:12%">Tanggal</th> 
+          <th class="text-end" style="width:14%">Amount GRN</th>
+          <th class="text-end" style="width:14%">Invoiced Amount</th>
+          <th class="text-end" style="width:14%">Uninvoiced Amount</th>
+        </tr> 
+        `);
+
+        const rows = supplier.recordset || [];
+        if (!rows.length) {
+          $body.append(`<tr><td colspan="7" class="text-center text-muted py-2">Tidak ada data</td></tr>`);
+        } else {
+          rows.forEach(function(row) {
+            const isGrn = row.type === 'GRN';
+            $body.append(`
+              <tr>
+                <td>${row.no || '-'}</td>
+                <td>${row.type || '-'}</td>
+                <td>${row.Status || '-'}</td>
+                <td>${formatDate(row.ReceivedDate)}</td>
+                <td class="text-end">${isGrn ? formatRupiah(row.TotalAmount) : ''}</td>
+                <td class="text-end">${isGrn ? '' : formatRupiah(row.InvAmt)}</td>
+                <td class="text-end"></td>
+              </tr>
+            `);
+          });
+        }
+
+        const payAmount = Number(summary.PayAmt || 0);
+        const sisaHutang = Number(summary.TotalAmount || 0) - payAmount;
+
+        $body.append(`
+          <tr class="subtotal-row">
+            <td colspan="4">Sub Total</td>
+            <td class="text-end">${formatRupiah(summary.TotalAmount)}</td>
+            <td class="text-end">${formatRupiah(invoicedAmount)}</td>
+            <td class="text-end">${formatRupiah(uninvoicedAmount)}</td>
+          </tr>
+          <tr>
+            <td colspan="7" class="text-end">
+                <table class='table'>
+                    <tr>
+                        <td>Amount GRN  </td>
+                        <td><strong>${formatRupiah(summary.TotalAmount)}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Invoiced Amount </td>
+                        <td><strong>${formatRupiah(invoicedAmount)}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Uninvoiced Amount </td>
+                        <td><strong>${formatRupiah(uninvoicedAmount)}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Pay Amount </td>
+                        <td><strong>${formatRupiah(payAmount)}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Sisa Hutang </td>
+                        <td><strong>${formatRupiah(sisaHutang)}</strong></td>
+                    </tr>
+                </table>
+            
+            </td>
+          </tr>
+          <tr><td colspan="7">&nbsp;</td></tr>
+        `);
+      });
+
+      $('#search-count').text(`Menampilkan ${dataset.length} dari ${globalReportData.length} supplier`);
+    }
+
+    function fetchReportData() {
+      const dbName = getDbNameFromUrl();
+      const startDate = getDateParam('startDate');
+      const lastDate = getDateParam('lastDate');
+      const lastPaymentDate = getDateParam('lastPaymentDate', lastDate);
+
+      const now = new Date();
+      $('#db-name').text(dbName);
+      $('#report-period').text(`${startDate} to ${lastDate}`);
+      $('#report-date').text(now.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }));
+      $('#report-time').text(now.toLocaleTimeString('en-GB'));
+
+      const apiUrl = `http://localhost:3000/${dbName}/customer/unInvoiceGrn?startDate=${encodeURIComponent(startDate)}&lastDate=${encodeURIComponent(lastDate)}&lastPaymentDate=${encodeURIComponent(lastPaymentDate)}`;
+
+      $('#report-body').html(`
+        <tr><td colspan="7" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+          <p class="text-muted mt-2 mb-0">Mengambil data GRN belum ter-invoice dari server...</p>
+        </td></tr>
+      `);
+
+      $.get(apiUrl)
+        .done(function(response) {
+          const res = typeof response === 'string' ? JSON.parse(response) : response;
+          globalReportData = res.data || [];
+          renderReport(globalReportData);
+        })
+        .fail(function(jqXHR, textStatus, errorThrown) {
+          console.error('Error fetching report data:', textStatus, errorThrown);
+          $('#report-body').html(`
+            <tr><td colspan="7" class="text-center py-5 text-danger">
+              <i class="bi bi-exclamation-triangle me-1"></i> Gagal mengambil data dari server: ${errorThrown || textStatus}
+            </td></tr>
+          `);
+        });
+    }
+
+    $(document).ready(function() {
+      fetchReportData();
+
+      $('#search-input').on('keyup', function() {
+        const value = $(this).val().toLowerCase().trim();
+        $('#report-supplier').text(value ? value.toUpperCase() : 'ALL');
+        const filtered = globalReportData.filter(function(item) {
+          return (item.supplierId || '').toLowerCase().includes(value) ||
+                 (item.supplierName || '').toLowerCase().includes(value);
+        });
+        renderReport(filtered);
+      });
+    });
+  </script>
+</body>
+
+</html>
+
+</content>

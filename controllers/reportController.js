@@ -55,7 +55,7 @@ exports.listDatabases = async (req, res) => {
     });
   }
 };
- 
+
 
 // Health check koneksi database (async controller)
 exports.healthDb = async (req, res) => {
@@ -83,8 +83,8 @@ exports.healthDb = async (req, res) => {
 };
 
 
-function QuerySaldoAwal(start = '2026-01-01' ){
- const q0 = `
+function QuerySaldoAwal(start = '2026-01-01') {
+  const q0 = `
       Declare @startDate DateTime 
         
       Set @startDate = '${start}'  
@@ -113,7 +113,7 @@ function QuerySaldoAwal(start = '2026-01-01' ){
       ) t1
       group by t1.SupplierID
       order by t1.SupplierID 
-    `; 
+    `;
   return q0;
 }
 
@@ -127,12 +127,12 @@ exports.getReportPage = async (req, res) => {
   try {
     const { startDate, endDate, lastPaymentDate } = req.query;
 
-    const start = startDate  ;
-    const end = endDate  ;
+    const start = startDate;
+    const end = endDate;
     const lastPay = lastPaymentDate || end;
 
 
-    if(!start || !end) {
+    if (!start || !end) {
       return res.status(400).json({
         status: 'error',
         requestedDb: dbName,
@@ -183,30 +183,30 @@ exports.getReportPage = async (req, res) => {
         ORDER BY s.SupplierName;
       `;
     const result = await pool
-      .request() 
+      .request()
       .query(q);
 
 
-    const q0 = QuerySaldoAwal(start); 
-  const q_saldoAwal = await pool
-      .request() 
+    const q0 = QuerySaldoAwal(start);
+    const q_saldoAwal = await pool
+      .request()
       .query(q0);
 
 
-  for (const row of result.recordset) {
-    const saldoAwalRow = q_saldoAwal.recordset.find(r => r.SupplierID === row.SupplierID);
-    row.saldoAwal = saldoAwalRow ? saldoAwalRow.saldoAwal : 0;
-    row.result = (row.saldoAwal || 0) + (row.invoiceTotal || 0) - (row.paidTotal || 0);
+    for (const row of result.recordset) {
+      const saldoAwalRow = q_saldoAwal.recordset.find(r => r.SupplierID === row.SupplierID);
+      row.saldoAwal = saldoAwalRow ? saldoAwalRow.saldoAwal : 0;
+      row.result = (row.saldoAwal || 0) + (row.invoiceTotal || 0) - (row.paidTotal || 0);
 
-   
-  } 
- 
-  let totalSaldoAwal = result.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
-    return res.json({ 
-      requestedDb: dbName, 
-      filter : { startDate: start, endDate: end, lastPaymentDate: lastPay },
+
+    }
+
+    let totalSaldoAwal = result.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
+    return res.json({
+      requestedDb: dbName,
+      filter: { startDate: start, endDate: end, lastPaymentDate: lastPay },
       total: result.recordset.length,
-      summary : {
+      summary: {
         totalSaldoAwal: totalSaldoAwal,
         totalInvoice: result.recordset.reduce((sum, row) => sum + (row.invoiceTotal || 0), 0),
         totalPayment: result.recordset.reduce((sum, row) => sum + (row.paidTotal || 0), 0),
@@ -216,8 +216,8 @@ exports.getReportPage = async (req, res) => {
       query: {
         reportQuery: q,
         saldoAwalQuery: q0
-      }, 
-      
+      },
+
     });
   } catch (err) {
     console.error(err);
@@ -232,7 +232,7 @@ exports.getReportPage = async (req, res) => {
 exports.getReportDetail = async (req, res) => {
   const dbName = validateDbNameOrRespond(req, res);
   if (!dbName) return;
-  
+
   try {
     const { supplierId, startDate, endDate, lastPaymentDate } = req.query;
     if (!supplierId || !startDate || !endDate) {
@@ -242,9 +242,9 @@ exports.getReportDetail = async (req, res) => {
         error: 'Parameter supplierId, startDate, dan endDate diperlukan untuk detail laporan.',
       });
     }
-    
-    const start = startDate ;
-    const end = endDate ;
+
+    const start = startDate;
+    const end = endDate;
     const lastPay = lastPaymentDate || end;
 
     const pool = await getPool(dbName);
@@ -290,12 +290,12 @@ exports.getReportDetail = async (req, res) => {
         ) t1
         join finMsSupplier as s on s.SupplierID = t1.SupplierID
         order by t1.ReceivedDate
-      `;  
+      `;
     const result = await pool.query(q);
     let totalSaldoAwal = 0;
 
 
-     const q0 = `
+    const q0 = `
     -- SALDO AWAL
 Declare @startDate DateTime 
 Declare @supplierId varchar(50)   
@@ -327,15 +327,15 @@ select t1.SupplierID, sum(t1.Invoice - t1.Paid) as 'saldoAwal' from (
 ) t1
 group by t1.SupplierID 
 order by t1.SupplierID
-    `; 
+    `;
     const q_saldoAwal = await pool
-      .request() 
+      .request()
       .query(q0);
     totalSaldoAwal = q_saldoAwal.recordset.length > 0 ? q_saldoAwal.recordset[0].saldoAwal : 0;
 
-    for( const row of result.recordset) {
-      if(row.TranxID === null || row.TranxID === undefined || row.TranxID === '') {
-        
+    for (const row of result.recordset) {
+      if (row.TranxID === null || row.TranxID === undefined || row.TranxID === '') {
+
 
         const temp1 = `
           -- Query untuk mendapatkan history TranxID
@@ -344,8 +344,8 @@ order by t1.SupplierID
         order by ReceiverDate ASC 
         `;
         const dataDetail = await pool
-      .request() 
-      .query(temp1);
+          .request()
+          .query(temp1);
         row.historyTranxID = dataDetail.recordset;
       }
     }
@@ -358,10 +358,10 @@ order by t1.SupplierID
       status: 'ok',
       requestedDb: dbName,
       filter: { supplierId, startDate: start, endDate: end, lastPaymentDate: lastPay },
-     
+
       total: result.recordset.length,
-      summary : {
-        totalSaldoAwal : totalSaldoAwal,
+      summary: {
+        totalSaldoAwal: totalSaldoAwal,
         totalInvoice: result.recordset.reduce((sum, row) => sum + (row.Invoice || 0), 0),
         totalPayment: result.recordset.reduce((sum, row) => sum + (row.Payment || 0), 0),
         totalBalance: totalSaldoAwal + result.recordset.reduce((sum, row) => sum + ((row.Invoice || 0) - (row.Payment || 0)), 0),
@@ -383,19 +383,19 @@ order by t1.SupplierID
 exports.getReportDetailAll = async (req, res) => {
   const dbName = validateDbNameOrRespond(req, res);
   if (!dbName) return;
-  
+
   try {
-    const {  startDate, endDate, lastPaymentDate } = req.query;
-    if (  !startDate || !endDate) {
+    const { startDate, endDate, lastPaymentDate } = req.query;
+    if (!startDate || !endDate) {
       return res.status(400).json({
         status: 'error',
         requestedDb: dbName,
         error: 'Parameter  tartDate, dan endDate diperlukan untuk detail laporan.',
       });
     }
-    
-    const start = startDate ;
-    const end = endDate ;
+
+    const start = startDate;
+    const end = endDate;
     const lastPay = lastPaymentDate || end;
 
     const pool = await getPool(dbName);
@@ -442,26 +442,26 @@ exports.getReportDetailAll = async (req, res) => {
  left join finMsSupplier as s on s.SupplierID = t1.SupplierID
  order by t1.ReceivedDate
 
-      `;  
+      `;
     const result = await pool.query(q);
-   
 
 
-     const q0 = QuerySaldoAwal(start);
-    
+
+    const q0 = QuerySaldoAwal(start);
+
     const q_saldoAwal = await pool
-      .request() 
+      .request()
       .query(q0);
-    
+
     // Create a map of SupplierID -> saldoAwal for quick lookup
     const saldoAwalMap = {};
     q_saldoAwal.recordset.forEach(row => {
       saldoAwalMap[row.SupplierID] = row.saldoAwal;
     });
 
-    for( const row of result.recordset) {
-      if(row.TranxID === null || row.TranxID === undefined || row.TranxID === '') {
-        
+    for (const row of result.recordset) {
+      if (row.TranxID === null || row.TranxID === undefined || row.TranxID === '') {
+
 
         const temp1 = `
           -- Query untuk mendapatkan history TranxID
@@ -470,8 +470,8 @@ exports.getReportDetailAll = async (req, res) => {
         order by ReceiverDate ASC 
         `;
         const dataDetail = await pool
-      .request() 
-      .query(temp1);
+          .request()
+          .query(temp1);
         row.historyTranxID = dataDetail.recordset;
       }
     }
@@ -486,11 +486,11 @@ exports.getReportDetailAll = async (req, res) => {
     return res.json({
       status: 'ok',
       requestedDb: dbName,
-      filter: {   startDate: start, endDate: end, lastPaymentDate: lastPay },
-     
+      filter: { startDate: start, endDate: end, lastPaymentDate: lastPay },
+
       total: result.recordset.length,
-      summary : {
-        totalSaldoAwal : totalSaldoAwal,
+      summary: {
+        totalSaldoAwal: totalSaldoAwal,
         totalInvoice: result.recordset.reduce((sum, row) => sum + (row.Invoice || 0), 0),
         totalPayment: result.recordset.reduce((sum, row) => sum + (row.Payment || 0), 0),
         totalBalance: totalSaldoAwal + result.recordset.reduce((sum, row) => sum + ((row.Invoice || 0) - (row.Payment || 0)), 0),
@@ -511,7 +511,7 @@ exports.getReportDetailAll = async (req, res) => {
 exports.getReportDetailSaldoAwal = async (req, res) => {
   const dbName = validateDbNameOrRespond(req, res);
   if (!dbName) return;
-  
+
   try {
     const { supplierId, startDate, lastPaymentDate } = req.query;
     if (!supplierId || !startDate) {
@@ -521,8 +521,8 @@ exports.getReportDetailSaldoAwal = async (req, res) => {
         error: 'Parameter supplierId dan startDate diperlukan untuk detail saldo awal.',
       });
     }
-    
-    const start = startDate ;
+
+    const start = startDate;
     const lastPay = lastPaymentDate || start;
 
     const pool = await getPool(dbName);
@@ -561,14 +561,14 @@ where rn = 1
         order by TranxID DESC
      `;
     const result = await pool.query(q);
-      
+
     return res.json({
       status: 'ok',
       requestedDb: dbName,
       filter: { supplierId, startDate: start, lastPaymentDate: lastPay },
-     
+
       total: result.recordset.length,
-      summary : {
+      summary: {
         totalInvoice: result.recordset.reduce((sum, row) => sum + (row.Invoice || 0), 0),
         totalPayment: result.recordset.reduce((sum, row) => sum + (row.Paid || 0), 0),
         totalBalance: result.recordset.reduce((sum, row) => sum + ((row.Invoice || 0) - (row.Paid || 0)), 0),
@@ -585,3 +585,104 @@ where rn = 1
     });
   }
 }
+
+exports.getUninvoiceGrn = async (req, res) => {
+  const dbName = validateDbNameOrRespond(req, res);
+  if (!dbName) return;
+
+  try {
+    const { startDate, lastDate, lastPaymentDate } = req.query;
+
+
+    const allSupplier = [];
+    const qSup = `select   SupplierID, SupplierName from FinMsSupplier`;
+    const pool = await getPool(dbName);
+    const resultSup = await pool.query(qSup);
+
+    for (const row of resultSup.recordset) {
+
+      const supplierId = row.SupplierID;
+
+      
+      const qGRN = `
+    Declare @startDate DateTime 
+    Declare @lastDate DateTime  
+    Declare @lastPaymentDate DateTime  
+
+    Set @startDate = '${startDate}' 
+    Set @lastDate = '${lastDate}' 
+    Set @lastPaymentDate = '${lastPaymentDate}' 
+     
+    select  g.SupplierID, 'GRN' as 'type', g.TranxID as 'no' , g.ReceivedDate, g.Status,   g.TotalAmount, 0 as InvAmt 
+    from FinMsGRN g 
+    where g.ReceivedDate between @startDate and @lastDate and g.SupplierID = '${supplierId}'
+    order by g.ReceivedDate ASC, g.TranxID ASC; 
+     `;
+      const result = await pool.query(qGRN);
+
+
+      const qInvoice = `
+    Declare @startDate DateTime 
+    Declare @lastDate DateTime  
+    Declare @lastPaymentDate DateTime  
+
+    Set @startDate = '${startDate}' 
+    Set @lastDate = '${lastDate}' 
+    Set @lastPaymentDate = '${lastPaymentDate}' 
+      
+    select g.SupplierID, 'INV' as 'type',  id.InvID as 'no' , 0 as 'TotalAmount', sum(id.InvAmt)  as 'InvAmt' ,
+    (
+    select  sum(pd.PayAmt)
+    from FinApPaymentDetail as pd
+    left join FinApPayment as p on p.PaymentID = pd.PaymentID
+    where p.Status = 'CLOSED'
+    and p.PaymentDate <= @lastPaymentDate and pd.InvID = id.InvID
+    ) as 'PayAmt' 
+    from FinMsGRN g
+    left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
+    where g.ReceivedDate between @startDate and @lastDate and g.SupplierID = '${supplierId}'
+    group by g.SupplierID, id.InvID
+
+     `;
+      const resultInvoice = await pool.query(qInvoice);
+
+      // saya mau gabungkan array recordset dari GRN dan Invoice menjadi satu array
+      const combinedRecordset = [...result.recordset, ...resultInvoice.recordset];
+
+      const summary = {
+        TotalAmount: combinedRecordset.reduce((acc, curr) => acc + (curr.TotalAmount || 0), 0),
+        InvAmt: combinedRecordset.reduce((acc, curr) => acc + (curr.InvAmt || 0), 0), 
+        unInvoice : combinedRecordset.reduce((acc, curr) => acc + (curr.TotalAmount || 0), 0) - combinedRecordset.reduce((acc, curr) => acc + (curr.InvAmt || 0), 0),
+        PayAmt: combinedRecordset.reduce((acc, curr) => acc + (curr.PayAmt || 0), 0),
+      }
+
+      const data = {
+        supplierId: supplierId,
+        supplierName: row.SupplierName,
+        recordset: combinedRecordset,
+        summary: summary,
+        TotalBalance : summary.TotalAmount  - summary.PayAmt,
+      }
+      // jika combinedRecordset tidak kosong, baru push ke allSupplier
+      if (combinedRecordset.length === 0) continue; 
+      allSupplier.push(data);
+    }
+
+
+    return res.json({
+      status: 'ok',
+      requestedDb: dbName,
+      filter: { startDate, lastDate, lastPaymentDate },
+
+      data: allSupplier,
+     
+    });
+  }
+  catch (err) {
+    return res.status(500).json({
+      status: 'error',
+      requestedDb: dbName,
+      error: 'Gagal ambil detail laporan: ' + err.message,
+    });
+  }
+};

@@ -208,58 +208,33 @@
       }
 
       const exportData = [];
-      globalReportData.forEach(function(supplier, supplierIndex) {
-        const summary = supplier.summary || {};
-        const totalAmount = Number(summary.TotalAmount) || 0;
-        const invoicedAmount = Number(summary.InvAmt) || 0;
-        const uninvoicedAmount = Number(summary.unInvoice) || 0;
-        const payAmount = Number(summary.PayAmt) || 0;
-        const sisaHutang = totalAmount - payAmount;
-
-        exportData.push([
-          `Supplier: ${supplier.supplierId || '-'} - ${supplier.supplierName || '-'}`
-        ]);
-        exportData.push([
-          'No', 'Type', 'Status', 'Tanggal', 'Amount GRN',
-          'Invoiced Amount', 'Uninvoiced Amount'
-        ]);
-
-        const rows = supplier.recordset || [];
-        if (!rows.length) {
-          exportData.push(['Tidak ada data']);
-        } else {
-          rows.forEach(function(row) {
-            const isGrn = row.type === 'GRN';
-            exportData.push([
-              row.no || '-',
-              row.type || '-',
-              row.Status || '-',
-              row.ReceivedDate ? new Date(row.ReceivedDate) : '',
-              isGrn ? Number(row.TotalAmount) || 0 : '',
-              isGrn ? '' : Number(row.InvAmt) || 0,
-              ''
-            ]);
+      globalReportData.forEach(function(supplier) {
+        (supplier.recordset || []).forEach(function(row) {
+          exportData.push({
+            'ID Supplier': supplier.supplierId || '',
+            'Nama Supplier': supplier.supplierName || '',
+            'No': row.no || '',
+            'Type': row.type || '',
+            'Status': row.Status || '',
+            'Tanggal': row.ReceivedDate ? new Date(row.ReceivedDate) : '',
+            'Amount': row.type === 'GRN' ? (Number(row.TotalAmount) || 0) : (Number(row.InvAmt) || 0)
           });
-        }
-
-        exportData.push([
-          'Sub Total', '', '', '', totalAmount, invoicedAmount, uninvoicedAmount
-        ]);
-        exportData.push(['Summary']);
-        exportData.push(['Amount GRN', '', '', '', totalAmount]);
-        exportData.push(['Invoiced Amount', '', '', '', invoicedAmount]);
-        exportData.push(['Uninvoiced Amount', '', '', '', uninvoicedAmount]);
-        exportData.push(['Pay Amount', '', '', '', payAmount]);
-        exportData.push(['Sisa Hutang', '', '', '', sisaHutang]);
-
-        if (supplierIndex < globalReportData.length - 1) {
-          exportData.push([]);
-          exportData.push([]);
-          exportData.push([]);
-        }
+        });
+        exportData.push({
+          'ID Supplier': supplier.supplierId || '',
+          'Nama Supplier': 'Invoiced Amount',
+          'No': '', 'Type': '', 'Status': '', 'Tanggal': '',
+          'Amount': Number(supplier.summary?.InvAmt) || 0
+        });
+        exportData.push({
+          'ID Supplier': supplier.supplierId || '',
+          'Nama Supplier': 'Uninvoiced Amount',
+          'No': '', 'Type': '', 'Status': '', 'Tanggal': '',
+          'Amount': Number(supplier.summary?.unInvoice) || 0
+        });
       });
 
-      const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
       worksheet['!cols'] = [
         { wch: 16 }, { wch: 30 }, { wch: 18 }, { wch: 8 },
         { wch: 14 }, { wch: 14 }, { wch: 18 }

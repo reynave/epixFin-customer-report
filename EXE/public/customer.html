@@ -108,19 +108,24 @@
       <!-- Search Bar Toolbar -->
       <div class="card-header bg-white py-3 border-0">
         <div class="row  align-items-center">
-          <div class="col-md-4">
+          <div class="col">
             <div class="input-group">
               <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
               <input type="text" id="search-input" class="form-control bg-light border-start-0"
                 placeholder="Cari Nama atau ID Supplier...">
             </div>
           </div>
-          <div class="col-md-6 text-md-end mt-2 mt-md-0">
+          <div class="col text-md-end mt-2 mt-md-0">
             <span class="text-muted small" id="search-count">Menampilkan seluruh data</span>
           </div>
-          <div class="col-2 d-grid">
+          <div class="col d-grid">
             <a href="customer-detail-all.html" id="detail-all-link" class="btn btn-outline-primary">
                 Detail All
+            </a> 
+          </div>
+          <div class="col d-grid">
+            <a href="univoiced-grn.html" id="uninvoiced-grn-link" class="btn btn-outline-primary">
+                Uninvoiced GRN
             </a> 
           </div>
         </div>
@@ -375,6 +380,14 @@
         dbName: urlParams.get('dbName') || ''
       });
       $('#detail-all-link').attr('href', `customer-detail-all.html?${detailAllParams.toString()}`);
+
+      const uninvoicedGrnParams = new URLSearchParams({
+        startDate: urlParams.get('startDate') || '',
+        lastDate: urlParams.get('endDate') || '',
+        lastPaymentDate: urlParams.get('lastPaymentDate') || '',
+        dbName: urlParams.get('dbName') || ''
+      });
+      $('#uninvoiced-grn-link').attr('href', `univoiced-grn.html?${uninvoicedGrnParams.toString()}`);
 
       $('#search-input').on('keyup input', function () {
         const keyword = $(this).val().toLowerCase().trim();

@@ -595,56 +595,95 @@ exports.getUninvoiceGrn = async (req, res) => {
 
 
     const allSupplier = [];
-    const qSup = `select   SupplierID, SupplierName from FinMsSupplier`;
+    const qSup = `select   SupplierID, SupplierName from FinMsSupplier `;
     const pool = await getPool(dbName);
     const resultSup = await pool.query(qSup);
 
+    const query = {
+      qGRN : '',
+      qInvoice : ''
+    }
     for (const row of resultSup.recordset) {
 
       const supplierId = row.SupplierID;
-
-      
+ 
       const qGRN = `
-    Declare @startDate DateTime 
-    Declare @lastDate DateTime  
-    Declare @lastPaymentDate DateTime  
+   
+Declare @startDate DateTime 
+Declare @lastDate DateTime  
+Declare @lastPaymentDate DateTime  
 
-    Set @startDate = '${startDate}' 
-    Set @lastDate = '${lastDate}' 
-    Set @lastPaymentDate = '${lastPaymentDate}' 
+Set @startDate = '${startDate}' 
+Set @lastDate = '${lastDate}' 
+Set @lastPaymentDate = '${lastPaymentDate}' 
      
-    select  g.SupplierID, 'GRN' as 'type', g.TranxID as 'no' , g.ReceivedDate, g.Status,   g.TotalAmount, 0 as InvAmt 
-    from FinMsGRN g 
-    where g.ReceivedDate between @startDate and @lastDate and g.SupplierID = '${supplierId}'
-    order by g.ReceivedDate ASC, g.TranxID ASC; 
+select  g.SupplierID, 'GRN' as 'type', g.TranxID as 'no' , g.ReceivedDate, g.Status,  
+g.TotalAmount, 0 as InvAmt,  ISNULL(
+	(
+		select  pd.PayAmt -  id.InvAmt as 'change'  
+from FinApInvoiceDetail id
+join FinApPaymentDetail as pd on pd.InvID = id.InvID
+join FinApInvoice as i on i.InvID = id.InvID
+join FinApPayment as p on p.PaymentID = pd.PaymentID
+where    p.PaidDate < @lastPaymentDate  and id.TranxID = g.TranxID  and p.Status = 'CLOSED'
+	),0) as 'change'
+
+from FinMsGRN g 
+where g.ReceivedDate between @startDate and @lastDate and g.SupplierID = '${supplierId}' 
+and ISNULL(
+	(
+		select  pd.PayAmt -  id.InvAmt as 'change'  
+from FinApInvoiceDetail id
+join FinApPaymentDetail as pd on pd.InvID = id.InvID
+join FinApInvoice as i on i.InvID = id.InvID
+join FinApPayment as p on p.PaymentID = pd.PaymentID
+where    p.PaidDate < @lastPaymentDate  and id.TranxID = g.TranxID  and p.Status = 'CLOSED'
+	),0) <= 0
+order by g.ReceivedDate ASC, g.TranxID ASC; 
+
      `;
+     query.qGRN = qGRN;
       const result = await pool.query(qGRN);
 
 
       const qInvoice = `
-    Declare @startDate DateTime 
-    Declare @lastDate DateTime  
-    Declare @lastPaymentDate DateTime  
+      Declare @startDate DateTime 
+      Declare @lastDate DateTime  
+      Declare @lastPaymentDate DateTime  
 
-    Set @startDate = '${startDate}' 
-    Set @lastDate = '${lastDate}' 
-    Set @lastPaymentDate = '${lastPaymentDate}' 
-      
-    select g.SupplierID, 'INV' as 'type',  id.InvID as 'no' , 0 as 'TotalAmount', sum(id.InvAmt)  as 'InvAmt' ,
-    (
-    select  sum(pd.PayAmt)
-    from FinApPaymentDetail as pd
-    left join FinApPayment as p on p.PaymentID = pd.PaymentID
-    where p.Status = 'CLOSED'
-    and p.PaymentDate <= @lastPaymentDate and pd.InvID = id.InvID
-    ) as 'PayAmt' 
-    from FinMsGRN g
-    left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
-    where g.ReceivedDate between @startDate and @lastDate and g.SupplierID = '${supplierId}'
-    group by g.SupplierID, id.InvID
+      Set @startDate = '${startDate}' 
+      Set @lastDate = '${lastDate}' 
+      Set @lastPaymentDate = '${lastPaymentDate}' 
+        
+      select g.SupplierID, 'INV' as 'type',  id.InvID as 'no' , 0 as 'TotalAmount', sum(id.InvAmt)  as 'InvAmt' ,
+        (
+        select  sum(pd.PayAmt)
+        from FinApPaymentDetail as pd
+        LEFT JOIN FinApPayment as p on p.PaymentID = pd.PaymentID
+        where p.Status = 'CLOSED'
+        and p.PaymentDate <= @lastPaymentDate and pd.InvID = id.InvID
+        ) as 'PayAmt' 
+      FROM FinMsGRN g
+      LEFT JOIN FinApInvoiceDetail as id on id.TranxID = g.TranxID
+      where g.ReceivedDate between @startDate and @lastDate and g.SupplierID = '${supplierId}'
+      group by g.SupplierID, id.InvID
 
      `;
+     query.qInvoice = qInvoice;
       const resultInvoice = await pool.query(qInvoice);
+
+    
+      for (const row of resultInvoice.recordset) {
+        row.changes =  row.InvAmt - row.PayAmt ;
+
+        if(row.changes <= 0) {
+          // remove array row tersebut
+          const index = resultInvoice.recordset.indexOf(row);
+          if (index > -1) {
+            resultInvoice.recordset.splice(index, 1);
+          }
+        }
+      }
 
       // saya mau gabungkan array recordset dari GRN dan Invoice menjadi satu array
       const combinedRecordset = [...result.recordset, ...resultInvoice.recordset];
@@ -675,6 +714,7 @@ exports.getUninvoiceGrn = async (req, res) => {
       filter: { startDate, lastDate, lastPaymentDate },
 
       data: allSupplier,
+      query : query
      
     });
   }

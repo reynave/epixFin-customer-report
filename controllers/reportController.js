@@ -351,7 +351,8 @@ order by t1.SupplierID
     }
 
 
-
+    // Hapus semua baris yang Payment > 0 (baris pembayaran)
+   // result.recordset = result.recordset.filter((row) => !(row.Payment > 0));
 
 
     return res.json({
@@ -394,12 +395,25 @@ exports.getReportDetailAll = async (req, res) => {
       });
     }
 
-    const start = startDate;
-    const end = endDate;
-    const lastPay = lastPaymentDate || end;
-
+    const allSupplier = [];
+    const qSup = `select   SupplierID, SupplierName from FinMsSupplier `;
     const pool = await getPool(dbName);
-    const q = `
+    const resultSup = await pool.query(qSup);
+
+    const query = {
+      qGRN: '',
+      qInvoice: ''
+    }
+    for (const row of resultSup.recordset) {
+
+      const supplierId = row.SupplierID;
+
+      const start = startDate;
+      const end = endDate;
+      const lastPay = lastPaymentDate || end;
+
+      const pool = await getPool(dbName);
+      const q = `
         
         Declare @startDate DateTime
         Declare @endDate DateTime
@@ -411,91 +425,104 @@ exports.getReportDetailAll = async (req, res) => {
         set @lastPaymentDate = '${lastPay}'
         
        
- select t1.*, s.SupplierName,
-	  (t1.Invoice - t1.Payment) AS  'balance' from (
-	 select 
-		grn.SupplierID, grn.TranxID, grn.ReceivedDate, apid.InvID, 
-		ISNULL(apid.InvAmt,grn.TotalAmount) as 'Invoice', 
-		'' as PaymentID, 
-		0 as 'Payment'
-	 from FinMsGRN as grn
-	 left join FinApInvoiceDetail as apid on apid.TranxID = grn.TranxID
-	 where CONVERT(VARCHAR(10), grn.ReceivedDate, 23) between @startDate and @endDate  
- 
-	 union 
+      select t1.*, s.SupplierName,
+          (t1.Invoice - t1.Payment) AS  'balance' from (
+        select 
+          grn.SupplierID, grn.TranxID, grn.ReceivedDate, apid.InvID, 
+          ISNULL(apid.InvAmt,grn.TotalAmount) as 'Invoice', 
+          '' as PaymentID, 
+          0 as 'Payment'
+        from FinMsGRN as grn
+        left join FinApInvoiceDetail as apid on apid.TranxID = grn.TranxID
+        where CONVERT(VARCHAR(10), grn.ReceivedDate, 23) between @startDate and @endDate  
+      and grn.SupplierID = '${supplierId}' 
+        union 
 
-	select 
-		appd.SupplierID, '' as 'TranxID', ( 
-		  select top 1 ReceiverDate from FinApInvoiceDetail 
-      where InvID= appd.InvID order by ReceiverDate desc
-      ) as 'ReceivedDate', appd.InvID, 
-		0 as 'Invoice', 
-		appd.PaymentID,  
-		appd.PayAmt as 'Payment'  
- 
-	from FinApPaymentDetail as appd 
-	left join FinApPayment as app on app.PaymentID = appd.PaymentID
+        select 
+          appd.SupplierID, '' as 'TranxID', ( 
+            select top 1 ReceiverDate from FinApInvoiceDetail 
+            where InvID= appd.InvID order by ReceiverDate desc
+            ) as 'ReceivedDate', appd.InvID, 
+          0 as 'Invoice', 
+          appd.PaymentID,  
+          appd.PayAmt as 'Payment'   
+        from FinApPaymentDetail as appd 
+        left join FinApPayment as app on app.PaymentID = appd.PaymentID
 
-	where app.PaymentDate  between @startDate and @lastPaymentDate and app.Status = 'CLOSED'
- 
- ) t1
- left join finMsSupplier as s on s.SupplierID = t1.SupplierID
- order by t1.ReceivedDate
+        where app.PaymentDate  between @startDate and @lastPaymentDate 
+        and app.Status = 'CLOSED' and appd.SupplierID = '${supplierId}'
+      
+      ) t1
+      left join finMsSupplier as s on s.SupplierID = t1.SupplierID
+      order by t1.ReceivedDate
 
       `;
-    const result = await pool.query(q);
+      const result = await pool.query(q);
+
+      const q0 = QuerySaldoAwal(start);
+
+      const q_saldoAwal = await pool
+        .request()
+        .query(q0);
+
+      // Create a map of SupplierID -> saldoAwal for quick lookup
+      const saldoAwalMap = {};
+      q_saldoAwal.recordset.forEach(row => {
+        saldoAwalMap[row.SupplierID] = row.saldoAwal;
+      });
+
+      for (const row of result.recordset) {
+        if (row.TranxID === null || row.TranxID === undefined || row.TranxID === '') {
 
 
-
-    const q0 = QuerySaldoAwal(start);
-
-    const q_saldoAwal = await pool
-      .request()
-      .query(q0);
-
-    // Create a map of SupplierID -> saldoAwal for quick lookup
-    const saldoAwalMap = {};
-    q_saldoAwal.recordset.forEach(row => {
-      saldoAwalMap[row.SupplierID] = row.saldoAwal;
-    });
-
-    for (const row of result.recordset) {
-      if (row.TranxID === null || row.TranxID === undefined || row.TranxID === '') {
-
-
-        const temp1 = `
+          const temp1 = `
           -- Query untuk mendapatkan history TranxID
          select  seq, TranxID, InvID, ReceiverDate, InvAmt from FinApInvoiceDetail 
          where invId = '${row.InvID}'
         order by ReceiverDate ASC 
         `;
-        const dataDetail = await pool
-          .request()
-          .query(temp1);
-        row.historyTranxID = dataDetail.recordset;
+          const dataDetail = await pool
+            .request()
+            .query(temp1);
+          row.historyTranxID = dataDetail.recordset;
+        }
       }
-    }
 
-    // Calculate total saldo awal per unique supplier
-    const uniqueSuppliers = [...new Set(result.recordset.map(r => r.SupplierID))];
-    let totalSaldoAwal = uniqueSuppliers.reduce((sum, suppId) => sum + (saldoAwalMap[suppId] || 0), 0);
-
+      // Calculate total saldo awal per unique supplier
+      const uniqueSuppliers = [...new Set(result.recordset.map(r => r.SupplierID))];
+      let totalSaldoAwal = uniqueSuppliers.reduce((sum, suppId) => sum + (saldoAwalMap[suppId] || 0), 0);
 
 
+      // Hapus semua baris yang Payment > 0 (baris pembayaran)
+      result.recordset = result.recordset.filter((row) => !(row.Payment > 0));
 
+ 
+      const data = {
+        supplierId: supplierId,
+        supplierName: result.recordset[0]?.SupplierName || '',
+        recordset: result.recordset,
+     //   summary: summary,
+       // TotalBalance: summary.TotalAmount - summary.PayAmt,
+      }
+      // jika result.recordset tidak kosong, baru push ke allSupplier
+      if (result.recordset.length === 0) continue;
+      allSupplier.push(data);
+
+    } 
+    
     return res.json({
       status: 'ok',
       requestedDb: dbName,
       filter: { startDate: start, endDate: end, lastPaymentDate: lastPay },
 
-      total: result.recordset.length,
-      summary: {
-        totalSaldoAwal: totalSaldoAwal,
-        totalInvoice: result.recordset.reduce((sum, row) => sum + (row.Invoice || 0), 0),
-        totalPayment: result.recordset.reduce((sum, row) => sum + (row.Payment || 0), 0),
-        totalBalance: totalSaldoAwal + result.recordset.reduce((sum, row) => sum + ((row.Invoice || 0) - (row.Payment || 0)), 0),
-      },
-      data: result.recordset,
+      //total: allSupplier.length,
+      // summary: {
+      //   totalSaldoAwal: totalSaldoAwal,
+      //   totalInvoice: result.recordset.reduce((sum, row) => sum + (row.Invoice || 0), 0),
+      //   totalPayment: result.recordset.reduce((sum, row) => sum + (row.Payment || 0), 0),
+      //   totalBalance: totalSaldoAwal + result.recordset.reduce((sum, row) => sum + ((row.Invoice || 0) - (row.Payment || 0)), 0),
+      // },
+      data: allSupplier,
       query: q + '\n' + q0,
     });
   }
@@ -600,13 +627,13 @@ exports.getUninvoiceGrn = async (req, res) => {
     const resultSup = await pool.query(qSup);
 
     const query = {
-      qGRN : '',
-      qInvoice : ''
+      qGRN: '',
+      qInvoice: ''
     }
     for (const row of resultSup.recordset) {
 
       const supplierId = row.SupplierID;
- 
+
       const qGRN = `
    
 Declare @startDate DateTime 
@@ -642,7 +669,7 @@ where    p.PaidDate < @lastPaymentDate  and id.TranxID = g.TranxID  and p.Status
 order by g.ReceivedDate ASC, g.TranxID ASC; 
 
      `;
-     query.qGRN = qGRN;
+      query.qGRN = qGRN;
       const result = await pool.query(qGRN);
 
 
@@ -669,14 +696,14 @@ order by g.ReceivedDate ASC, g.TranxID ASC;
       group by g.SupplierID, id.InvID
 
      `;
-     query.qInvoice = qInvoice;
+      query.qInvoice = qInvoice;
       const resultInvoice = await pool.query(qInvoice);
 
-    
-      for (const row of resultInvoice.recordset) {
-        row.changes =  row.InvAmt - row.PayAmt ;
 
-        if(row.changes <= 0) {
+      for (const row of resultInvoice.recordset) {
+        row.changes = row.InvAmt - row.PayAmt;
+
+        if (row.changes <= 0) {
           // remove array row tersebut
           const index = resultInvoice.recordset.indexOf(row);
           if (index > -1) {
@@ -690,8 +717,8 @@ order by g.ReceivedDate ASC, g.TranxID ASC;
 
       const summary = {
         TotalAmount: combinedRecordset.reduce((acc, curr) => acc + (curr.TotalAmount || 0), 0),
-        InvAmt: combinedRecordset.reduce((acc, curr) => acc + (curr.InvAmt || 0), 0), 
-        unInvoice : combinedRecordset.reduce((acc, curr) => acc + (curr.TotalAmount || 0), 0) - combinedRecordset.reduce((acc, curr) => acc + (curr.InvAmt || 0), 0),
+        InvAmt: combinedRecordset.reduce((acc, curr) => acc + (curr.InvAmt || 0), 0),
+        unInvoice: combinedRecordset.reduce((acc, curr) => acc + (curr.TotalAmount || 0), 0) - combinedRecordset.reduce((acc, curr) => acc + (curr.InvAmt || 0), 0),
         PayAmt: combinedRecordset.reduce((acc, curr) => acc + (curr.PayAmt || 0), 0),
       }
 
@@ -700,10 +727,10 @@ order by g.ReceivedDate ASC, g.TranxID ASC;
         supplierName: row.SupplierName,
         recordset: combinedRecordset,
         summary: summary,
-        TotalBalance : summary.TotalAmount  - summary.PayAmt,
+        TotalBalance: summary.TotalAmount - summary.PayAmt,
       }
       // jika combinedRecordset tidak kosong, baru push ke allSupplier
-      if (combinedRecordset.length === 0) continue; 
+      if (combinedRecordset.length === 0) continue;
       allSupplier.push(data);
     }
 
@@ -714,8 +741,8 @@ order by g.ReceivedDate ASC, g.TranxID ASC;
       filter: { startDate, lastDate, lastPaymentDate },
 
       data: allSupplier,
-      query : query
-     
+      query: query
+
     });
   }
   catch (err) {

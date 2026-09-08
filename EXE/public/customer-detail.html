@@ -116,18 +116,28 @@
                 <th scope="col" class="ps-4">Tanggal Terima</th>
                 <th scope="col">Tranx ID</th>
                 <th scope="col">Inv ID</th>
-                <th scope="col">Payment ID</th>
+                <!-- <th scope="col">Payment ID</th> -->
                 <th scope="col" class="text-end">Invoice (Rp)</th>
                 <th scope="col" class="text-end">Payment (Rp)</th>
                 <th scope="col" class="text-end pe-4">Balance (Rp)</th>
               </tr>
             </thead>
+            <tbody>
+               <tr>
+                <Td></Td>
+                <Td></Td>
+                <Td></Td>
+                <Td class="text-end"></Td>
+                <Td class="text-end"></Td>
+                <Td class="text-end pe-4" > <b id="saldo-awal-body"></b></Td>
+               </tr>
+            </tbody>
             <tbody id="detail-body">
               <!-- Data dimuat di sini -->
             </tbody>
             <tfoot class="table-group-divider fw-bold bg-light">
               <tr>
-                <td colspan="4" class="ps-4">TOTAL (FILTERED)</td>
+                <td colspan="3" class="ps-4">TOTAL (FILTERED)</td>
                 <td class="text-end" id="foot-invoice">Rp 0</td>
                 <td class="text-end" id="foot-payment">Rp 0</td>
                 <td class="text-end pe-4" id="foot-balance">Rp 0</td>
@@ -328,7 +338,7 @@
                 })() : ''}
                 </td>
               <td><span class="badge bg-light text-dark border">${item.InvID || '-'}</span></td>
-              <td>${item.PaymentID ? `<span class="badge bg-success-subtle text-success border border-success-subtle">${item.PaymentID}</span>` : '<span class="text-muted">-</span>'}</td>
+            
               <td class="text-end fw-semibold">${formatRupiah(invAmt)}</td>
               <td class="text-end text-success fw-semibold">${formatRupiah(payAmt)}</td>
               <td class="text-end pe-4 ${balanceClass}">${formatRupiah(balAmt)}</td>
@@ -385,6 +395,7 @@
             $('#stat-total-invoice').text(formatRupiah(res.summary.totalInvoice));
             $('#stat-total-payment').text(formatRupiah(res.summary.totalPayment));
             $('#stat-total-balance').text(formatRupiah(res.summary.totalBalance));
+  $('#saldo-awal-body').text(formatRupiah(res.summary.totalSaldoAwal));
  
             $('#foot-invoice').text(formatRupiah(res.summary.totalInvoice));
             $('#foot-payment').text(formatRupiah(res.summary.totalPayment));

@@ -176,6 +176,10 @@ exports.getReportPage = async (req, res) => {
           LEFT JOIN FinApPayment AS app ON app.PaymentID = appd.PaymentID
           WHERE app.PaymentDate BETWEEN @startDate AND @lastPaymentDate
             AND app.Status = 'CLOSED'
+            and ( 
+              select top 1 ReceiverDate from FinApInvoiceDetail 
+              where InvID= appd.InvID order by ReceiverDate desc
+              ) is not null
           GROUP BY appd.SupplierID
         ) t1
         LEFT JOIN FinMsSupplier AS s ON s.SupplierID = t1.SupplierID
@@ -286,7 +290,11 @@ exports.getReportDetail = async (req, res) => {
           left join FinApPayment as app on app.PaymentID = appd.PaymentID
 
           where app.PaymentDate  between @startDate and @lastPaymentDate and app.Status = 'CLOSED'
-          and appd.SupplierID = @supplierId
+          and appd.SupplierID = @supplierId and 
+          ( 
+              select top 1 ReceiverDate from FinApInvoiceDetail 
+              where InvID= appd.InvID order by ReceiverDate desc
+              ) is not null
         ) t1
         join finMsSupplier as s on s.SupplierID = t1.SupplierID
         order by t1.ReceivedDate

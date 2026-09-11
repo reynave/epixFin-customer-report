@@ -33,8 +33,12 @@
         <button class="btn btn-outline-secondary" onclick="window.print()">
           <i class="bi bi-printer me-1"></i> Cetak Detail
         </button>
-        <button class="btn btn-primary" onclick="exportToExcel()">
+        <button class="btn btn-outline-secondary" onclick="exportToExcel()">
           <i class="bi bi-file-earmark-excel me-1"></i> Export *.xlsx
+        </button>
+
+         <button class="btn btn-dark" onclick="goToDetail()">
+          <i class="bi bi-file-earmark-excel me-1"></i> Detail All Customer
         </button>
       </div>
     </div>
@@ -177,6 +181,14 @@
     }
 
     let globalReportData = [];
+
+    function goToDetail() {
+      const dbName = new URLSearchParams(window.location.search).get('dbName') || 'EpixFIN_RMM';
+      const startDate = new URLSearchParams(window.location.search).get('startDate') || '';
+      const endDate = new URLSearchParams(window.location.search).get('endDate') || '';
+      const lastPaymentDate = new URLSearchParams(window.location.search).get('lastPaymentDate') || '';
+      window.location.href = `customer-detail-all.html?dbName=${encodeURIComponent(dbName)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&lastPaymentDate=${encodeURIComponent(lastPaymentDate)}`;
+    }
 
     function exportToExcel() {
       if (!globalReportData.length) {

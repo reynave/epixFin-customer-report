@@ -140,9 +140,8 @@
                 <th scope="col" class="ps-4">Supplier</th>
                 <th scope="col">ID Supplier</th>
                 <th scope="col" class="text-end">Saldo Awal</th>
-                <th scope="col" class="text-end">Invoice Total</th>
-                <th scope="col" class="text-end">Paid Total</th>
-                <th scope="col" class="text-end">Sisa (Result)</th>
+                
+                <th scope="col" class="text-end">Balance</th>
                 <th scope="col" class="text-center">Status</th>
                 <th scope="col" class="text-center pe-4">Aksi</th>
               </tr>
@@ -197,15 +196,16 @@
       }
 
       const exportData = globalReportData.map(function(item) {
-        const invoiceTotal = Number(item.invoiceTotal) || 0;
-        const paidTotal = Number(item.paidTotal) || 0;
-        const resultValue = Number(item.result) || 0;
+        const saldoAwal = Number(item.saldoAwal) || 0;
+        const balance = Number(item.balance) || 0;
+        const paidTotal = Number(item.paidTotal || item.payment) || 0;
+        const resultValue = saldoAwal + balance - paidTotal;
 
         return {
           Supplier: item.SupplierName || '',
           'ID Supplier': item.SupplierID || '',
-          'Saldo Awal': Number(item.saldoAwal) || 0,
-          'Invoice Total': invoiceTotal,
+          'Saldo Awal': saldoAwal,
+          'Invoice Total': balance,
           'Paid Total': paidTotal,
           'Sisa (Result)': resultValue,
           Status: resultValue === 0 ? 'Lunas' : (resultValue > 0 ? 'Sisa Utang' : 'Lebih Bayar')
@@ -244,7 +244,7 @@
       if (!dataset || dataset.length === 0) {
         $tbody.append(`
         <tr>
-          <td colspan="8" class="text-center py-4 text-muted">
+          <td colspan="6" class="text-center py-4 text-muted">
             <i class="bi bi-search me-1"></i> Data supplier tidak ditemukan
           </td>
         </tr>
@@ -252,12 +252,12 @@
       } else {
         $.each(dataset, function (index, item) {
           const saldoAwal = Number(item.saldoAwal || 0);
-          const invoiceTotal = Number(item.invoiceTotal || 0);
-          const paidTotal = Number(item.paidTotal || 0);
-          const resultValue = Number(item.result || 0);
+          const balance = Number(item.balance || 0);
+          const paidTotal = Number(item.paidTotal || item.payment || 0);
+          const resultValue = Number(item.balance || 0);
 
           grandSaldoAwal += saldoAwal;
-          grandInvoice += invoiceTotal;
+          grandInvoice += balance;
           grandPaid += paidTotal;
           grandResult += resultValue;
 
@@ -288,9 +288,7 @@
                  <a href="customer-detail-saldo-awal.html?id=${encodedId}&startDate=${encodeURIComponent(startDate || '')}&lastPaymentDate=${encodeURIComponent(lastPaymentDate || '')}&dbName=${encodeURIComponent(dbName || '')}">
                       ${formatRupiah(saldoAwal)} <i class="bi bi-box-arrow-up-right"></i>
                 </a> 
-              </td>
-              <td class="text-end fw-semibold">${formatRupiah(invoiceTotal)}</td>
-              <td class="text-end text-success">${formatRupiah(paidTotal)}</td>
+              </td> 
               <td class="text-end ${resultClass}">${formatRupiah(resultValue)}</td>
               <td class="text-center">${statusBadge}</td>
               <td class="text-center pe-4">
@@ -325,7 +323,7 @@
 
       $('#report-body').html(`
       <tr>
-        <td colspan="8" class="text-center py-5">
+        <td colspan="6" class="text-center py-5">
           <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Loading...</span>
           </div>
@@ -338,29 +336,34 @@
         .done(function (response) {
           const res = typeof response === 'string' ? JSON.parse(response) : response;
 
-          $('#q').text(res.query.reportQuery || '');
-          $('#q0').text(res.query.saldoAwalQuery || '');
+          $('#q').text((res.query && res.query.reportQuery) || '');
+          $('#q0').text((res.query && res.query.saldoAwalQuery) || '');
 
           $('#db-name').text(res.requestedDb || 'EpixFIN_RMM');
           if (res.filter) {
             $('#report-period').text(`${res.filter.startDate} s/d ${res.filter.endDate}`);
           }
 
-          $('#last-payment').text(res.filter.lastPaymentDate || '-');
+          $('#last-payment').text((res.filter && res.filter.lastPaymentDate) || '-');
           globalReportData = res.data || [];
           $('#stat-total-supplier').text(res.total || globalReportData.length);
 
-          let initialInvoice = globalReportData.reduce((acc, curr) => acc + (curr.invoiceTotal || 0), 0);
-          let initialPaid = globalReportData.reduce((acc, curr) => acc + (curr.paidTotal || 0), 0);
-          let initialResult = initialInvoice - initialPaid;
+          const summary = res.summary || {};
+          let initialInvoice = summary.totalInvoice !== undefined
+            ? summary.totalInvoice
+            : globalReportData.reduce((acc, curr) => acc + (curr.invoice || 0), 0);
+          let initialPaid = summary.totalPayment !== undefined ? summary.totalPayment : 0;
+          let initialSaldoAwal = summary.totalSaldoAwal !== undefined
+            ? summary.totalSaldoAwal
+            : globalReportData.reduce((acc, curr) => acc + (curr.saldoAwal || 0), 0);
+          let initialResult = summary.totalBalance !== undefined
+            ? summary.totalBalance
+            : (initialSaldoAwal + initialInvoice - initialPaid);
 
-   
-
-          let initialSaldoAwal = (res.summary && res.summary.totalSaldoAwal) || globalReportData.reduce((acc, curr) => acc + (curr.saldoAwal || 0), 0);
           $('#stat-total-saldo-awal').text(formatRupiah(initialSaldoAwal));
           $('#stat-total-invoice').text(formatRupiah(initialInvoice));
           $('#stat-total-paid').text(formatRupiah(initialPaid));
-          $('#stat-total-result').text(formatRupiah(res.summary && res.summary.totalBalance || initialResult));
+          $('#stat-total-result').text(formatRupiah(initialResult));
 
           renderTable(globalReportData);
         })
@@ -368,7 +371,7 @@
           console.error('Error fetching data:', textStatus, errorThrown);
           $('#report-body').html(`
           <tr>
-            <td colspan="8" class="text-center py-4 text-danger">
+            <td colspan="6" class="text-center py-4 text-danger">
               <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
               Gagal mengambil data dari server (<code>${apiUrl}</code>).
             </td>

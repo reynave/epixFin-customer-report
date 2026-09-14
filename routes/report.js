@@ -28,9 +28,7 @@ router.get('/getCustomer', reportController.getCustomer);
 router.get('/customer', reportController.getReportPage); 
 router.get('/customer/detail', reportController.getReportDetail);
 router.get('/customer/unInvoiceGrn', reportController.getUninvoiceGrn);
-
-router.get('/customer/detail/all', reportController.getReportDetailAll_DEL);
-
+ 
 router.get('/customer/detail/saldo-awal', reportController.getReportDetailSaldoAwal);
 
 module.exports = router;

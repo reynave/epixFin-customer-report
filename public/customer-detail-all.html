@@ -29,7 +29,7 @@
       </div>
     </div>
 
-    <!-- Filter Periode Saldo Awal -->
+    <!-- Filter Periode Invoice -->
     <div class="card border-0 shadow-sm mt-3">
       <div class="card-body">
         <div class="row g-2 align-items-end">
@@ -89,7 +89,7 @@
               <tr>
                 <th scope="col" class="ps-4">Supplier</th>
                 <th scope="col">ID Supplier</th>
-                <th scope="col" class="text-end">Saldo Awal</th>
+                <th scope="col" class="text-end">Invoice</th>
                 <th scope="col" class="text-center pe-4">Aksi</th>
               </tr>
             </thead>
@@ -204,7 +204,7 @@
         });
     }
 
-    // Ambil satu saldo awal (beserta detail transaksi) via AJAX, dibungkus Promise agar bisa di-await berurutan
+    // Ambil satu Invoice (beserta detail transaksi) via AJAX, dibungkus Promise agar bisa di-await berurutan
     function fetchSaldoAwalForSupplier(dbName, supplierId, startDate, endDate, lastPaymentDate) {
       const apiUrl = `http://localhost:3000/${dbName}/customer/detail` +
         `?supplierId=${encodeURIComponent(supplierId)}` +
@@ -264,14 +264,14 @@
               <td class="text-end">${formatRupiah(totalInvoice)}</td>
               <td></td>
               <td class="text-end">${formatRupiah(totalPayment)}</td>
-              <td class="text-end">${formatRupiah(totalBalance)}</td>
+              <td class="text-end"></td>
             </tr>
           </tfoot>
         </table>
       `;
     }
 
-    // Waterfall: tarik saldo awal & detail satu-per-satu (berurutan, bukan paralel) untuk setiap supplier
+    // Waterfall: tarik Invoice & detail satu-per-satu (berurutan, bukan paralel) untuk setiap supplier
     async function fetchSaldoAwalWaterfall() {
       const urlParams = new URLSearchParams(window.location.search);
       const dbName = urlParams.get('dbName') || 'EpixFIN_RMM';
@@ -302,14 +302,15 @@
 
         try {
           // await di dalam loop membuat request berjalan satu-per-satu, tidak paralel
-          const { saldoAwal, detail } = await fetchSaldoAwalForSupplier(dbName, item.SupplierID, startDate, endDate, lastPaymentDate);
-          item.saldoAwal = saldoAwal;
+          const { detail } = await fetchSaldoAwalForSupplier(dbName, item.SupplierID, startDate, endDate, lastPaymentDate);
+          console.log('Fetched Invoice for', item.SupplierID, { detail });
+          item.saldoAwal = detail.reduce((sum, r) => sum + (r.Invoice || 0), 0);
           item.saldoAwalDetail = detail;
-          $cell.removeClass('text-muted').text(formatRupiah(saldoAwal));
+          $cell.removeClass('text-muted').text(formatRupiah(item.saldoAwal));
           $detailContainer.html(renderDetailTable(detail));
           $detailBtn.prop('disabled', false);
         } catch (err) {
-          console.error('Gagal ambil saldo awal untuk', item.SupplierID, err);
+          console.error('Gagal ambil Invoice untuk', item.SupplierID, err);
           $cell.removeClass('text-muted').addClass('text-danger').text('Error');
         }
       }
@@ -327,7 +328,7 @@
       });
 
       if (suppliersWithDetail.length === 0) {
-        alert('Tarik data saldo awal terlebih dahulu sebelum export.');
+        alert('Tarik data Invoice terlebih dahulu sebelum export.');
         return;
       }
 
@@ -337,10 +338,10 @@
         const detail = item.saldoAwalDetail || [];
         const totalInvoice = detail.reduce((sum, r) => sum + (r.Invoice || 0), 0);
         const totalPayment = detail.reduce((sum, r) => sum + (r.Payment || 0), 0);
-        const totalBalance = detail.reduce((sum, r) => sum + (r.balance || 0), 0);
+        const totalBalance = '';
 
         aoa.push([`Supplier: ${item.SupplierName || '-'} (${item.SupplierID || '-'})`]);
-        aoa.push([`Saldo Awal: ${item.saldoAwal || 0}`]);
+        aoa.push([`Invoice: ${item.saldoAwal || 0}`]);
         aoa.push(['Received Date', 'TranxID', 'InvID', 'Invoice', 'PaymentID', 'Payment', 'Balance']);
 
         detail.forEach(function (r) {
@@ -363,7 +364,7 @@
 
       const worksheet = XLSX.utils.aoa_to_sheet(aoa);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Detail Saldo Awal');
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Detail Invoice');
 
       const dbName = new URLSearchParams(window.location.search).get('dbName') || 'EpixFIN_RMM';
       const safeDbName = dbName.replace(/[^a-z0-9_-]/gi, '_');

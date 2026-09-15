@@ -192,7 +192,7 @@ exports.getReportPage = async (req, res) => {
           select pd.InvID, SUM(pd.PayAmt + pd.AmtAdj) as 'TotalPaid'
           from FinApPaymentDetail as pd
           join FinApPayment as p on p.PaymentID = pd.PaymentID
-          where p.PaymentDate between @startDate and @endDate 
+          where p.PaymentDate < @lastPaymentDate 
           and p.Status = 'CLOSED'
           group by pd.InvID
         ) b on b.InvID = a.InvID
@@ -311,7 +311,7 @@ exports.getReportDetail = async (req, res) => {
           from FinApPaymentDetail as pd
           join FinApPayment as p on p.PaymentID = pd.PaymentID
           where pd.SupplierID = '${supplierId}' 
-          and p.PaymentDate between '${start}' and '${end}' 
+          and p.PaymentDate < '${lastPay}' 
           and p.Status = 'CLOSED'
           group by pd.InvID
         ) b on b.InvID = a.InvID

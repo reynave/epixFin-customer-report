@@ -148,6 +148,7 @@ exports.getCustomer = async (req, res) => {
   }
 };
  
+
 exports.getReportPage = async (req, res) => {
   const dbName = validateDbNameOrRespond(req, res);
   if (!dbName) return;
@@ -195,7 +196,8 @@ exports.getReportPage = async (req, res) => {
           and p.Status = 'CLOSED'
           group by pd.InvID
         ) b on b.InvID = a.InvID
-        where (a.InvAmt - ISNULL(b.TotalPaid, 0)) > 0 or ISNULL(b.TotalPaid, 0) <= 0
+        where  ( ((a.InvAmt - ISNULL(b.TotalPaid, 0)) > 0 or ISNULL(b.TotalPaid, 0) <= 0 ) or 
+          ISNULL(a.InvAmt,a.TotalAmount) < 0 )  
         group by a.SupplierID
         order by a.SupplierID ASC
       `;
@@ -305,7 +307,7 @@ exports.getReportDetail = async (req, res) => {
           and g.ReceivedDate between '${start}' and '${end}' 
         ) a
         left join (
-          select pd.InvID, SUM(pd.PayAmt) as 'TotalPaid'
+          select pd.InvID, SUM(pd.PayAmt + pd.AmtAdj) as 'TotalPaid'
           from FinApPaymentDetail as pd
           join FinApPayment as p on p.PaymentID = pd.PaymentID
           where pd.SupplierID = '${supplierId}' 
@@ -313,7 +315,9 @@ exports.getReportDetail = async (req, res) => {
           and p.Status = 'CLOSED'
           group by pd.InvID
         ) b on b.InvID = a.InvID
-        where (a.InvAmt - ISNULL(b.TotalPaid, 0)) > 0 or ISNULL(b.TotalPaid, 0) <= 0
+        where 
+          ((a.InvAmt - ISNULL(b.TotalPaid, 0)) > 0 or ISNULL(b.TotalPaid, 0) <= 0 ) 
+          or   ISNULL(a.InvAmt,a.TotalAmount) < 0 
         order by a.ReceivedDate ASC, a.TranxID ASC
       `;
     const result = await pool.query(q);
@@ -432,4 +436,143 @@ where rn = 1
   }
 }
 
- 
+exports.getUninvoiceGrn = async (req, res) => {
+  const dbName = validateDbNameOrRespond(req, res);
+  if (!dbName) return;
+
+  try {
+    const { startDate, lastDate, lastPaymentDate } = req.query;
+
+
+    const allSupplier = [];
+    const qSup = `select   SupplierID, SupplierName from FinMsSupplier `;
+    const pool = await getPool(dbName);
+    const resultSup = await pool.query(qSup);
+
+    const query = {
+      qGRN: '',
+      qInvoice: ''
+    }
+    for (const row of resultSup.recordset) {
+
+      const supplierId = row.SupplierID;
+
+      const qGRN = `
+   
+Declare @startDate DateTime 
+Declare @lastDate DateTime  
+Declare @lastPaymentDate DateTime  
+
+Set @startDate = '${startDate}' 
+Set @lastDate = '${lastDate}' 
+Set @lastPaymentDate = '${lastPaymentDate}' 
+     
+select  g.SupplierID, 'GRN' as 'type', g.TranxID as 'no' , g.ReceivedDate, g.Status,  
+g.TotalAmount, 0 as InvAmt,  ISNULL(
+	(
+		select  pd.PayAmt -  id.InvAmt as 'change'  
+from FinApInvoiceDetail id
+join FinApPaymentDetail as pd on pd.InvID = id.InvID
+join FinApInvoice as i on i.InvID = id.InvID
+join FinApPayment as p on p.PaymentID = pd.PaymentID
+where    p.PaidDate < @lastPaymentDate  and id.TranxID = g.TranxID  and p.Status = 'CLOSED'
+	),0) as 'change'
+
+from FinMsGRN g 
+where g.ReceivedDate between @startDate and @lastDate and g.SupplierID = '${supplierId}' 
+and ISNULL(
+	(
+		select  pd.PayAmt -  id.InvAmt as 'change'  
+from FinApInvoiceDetail id
+join FinApPaymentDetail as pd on pd.InvID = id.InvID
+join FinApInvoice as i on i.InvID = id.InvID
+join FinApPayment as p on p.PaymentID = pd.PaymentID
+where    p.PaidDate < @lastPaymentDate  and id.TranxID = g.TranxID  and p.Status = 'CLOSED'
+	),0) <= 0
+order by g.ReceivedDate ASC, g.TranxID ASC; 
+
+     `;
+      query.qGRN = qGRN;
+      const result = await pool.query(qGRN);
+
+
+      const qInvoice = `
+      Declare @startDate DateTime 
+      Declare @lastDate DateTime  
+      Declare @lastPaymentDate DateTime  
+
+      Set @startDate = '${startDate}' 
+      Set @lastDate = '${lastDate}' 
+      Set @lastPaymentDate = '${lastPaymentDate}' 
+        
+      select g.SupplierID, 'INV' as 'type',  id.InvID as 'no' , 0 as 'TotalAmount', sum(id.InvAmt)  as 'InvAmt' ,
+        (
+        select  sum(pd.PayAmt)
+        from FinApPaymentDetail as pd
+        LEFT JOIN FinApPayment as p on p.PaymentID = pd.PaymentID
+        where p.Status = 'CLOSED'
+        and p.PaymentDate <= @lastPaymentDate and pd.InvID = id.InvID
+        ) as 'PayAmt' 
+      FROM FinMsGRN g
+      LEFT JOIN FinApInvoiceDetail as id on id.TranxID = g.TranxID
+      where g.ReceivedDate between @startDate and @lastDate and g.SupplierID = '${supplierId}'
+      group by g.SupplierID, id.InvID
+
+     `;
+      query.qInvoice = qInvoice;
+      const resultInvoice = await pool.query(qInvoice);
+
+
+      for (const row of resultInvoice.recordset) {
+        row.changes = row.InvAmt - row.PayAmt;
+
+        if (row.changes <= 0) {
+          // remove array row tersebut
+          const index = resultInvoice.recordset.indexOf(row);
+          if (index > -1) {
+            resultInvoice.recordset.splice(index, 1);
+          }
+        }
+      }
+
+      // saya mau gabungkan array recordset dari GRN dan Invoice menjadi satu array
+      const combinedRecordset = [...result.recordset, ...resultInvoice.recordset];
+
+      const summary = {
+        TotalAmount: combinedRecordset.reduce((acc, curr) => acc + (curr.TotalAmount || 0), 0),
+        InvAmt: combinedRecordset.reduce((acc, curr) => acc + (curr.InvAmt || 0), 0),
+        unInvoice: combinedRecordset.reduce((acc, curr) => acc + (curr.TotalAmount || 0), 0) - combinedRecordset.reduce((acc, curr) => acc + (curr.InvAmt || 0), 0),
+        PayAmt: combinedRecordset.reduce((acc, curr) => acc + (curr.PayAmt || 0), 0),
+      }
+
+      const data = {
+        supplierId: supplierId,
+        supplierName: row.SupplierName,
+        recordset: combinedRecordset,
+        summary: summary,
+        TotalBalance: summary.TotalAmount - summary.PayAmt,
+      }
+      // jika combinedRecordset tidak kosong, baru push ke allSupplier
+      if (combinedRecordset.length === 0) continue;
+      allSupplier.push(data);
+    }
+
+
+    return res.json({
+      status: 'ok',
+      requestedDb: dbName,
+      filter: { startDate, lastDate, lastPaymentDate },
+
+      data: allSupplier,
+      query: query
+
+    });
+  }
+  catch (err) {
+    return res.status(500).json({
+      status: 'error',
+      requestedDb: dbName,
+      error: 'Gagal ambil detail laporan: ' + err.message,
+    });
+  }
+};

@@ -116,27 +116,21 @@
                 <th scope="col" class="ps-4">Tanggal Terima</th>
                 <th scope="col">Tranx ID</th>
                 <th scope="col">Inv ID</th>
-                <!-- <th scope="col">Payment ID</th> -->
+                 <th scope="col">Payment ID</th> 
                 <th scope="col" class="text-end">Invoice (Rp)</th> 
+                <th scope="col" class="text-end">Payment (Rp)</th> 
                 <th scope="col" class="text-end pe-4">Balance (Rp)</th>
               </tr>
             </thead>
-            <tbody>
-               <tr>
-                <Td></Td>
-                <Td></Td>
-                <Td></Td>
-                <Td class="text-end"></Td> 
-                <Td class="text-end pe-4" > <b id="saldo-awal-body"></b></Td>
-               </tr>
-            </tbody>
+           
             <tbody id="detail-body">
               <!-- Data dimuat di sini -->
             </tbody>
             <tfoot class="table-group-divider fw-bold bg-light">
               <tr>
-                <td colspan="3" class="ps-4">TOTAL (FILTERED)</td>
+                <td colspan="4" class="ps-4">TOTAL (FILTERED)</td>
                 <td class="text-end" id="foot-invoice">Rp 0</td> 
+                <td class="text-end" id="foot-payment">Rp 0</td> 
                 <td class="text-end pe-4" id="foot-balance">Rp 0</td>
               </tr>
             </tfoot>
@@ -145,40 +139,7 @@
       </div>
     </div>
   </div>
-
-  <!-- Modal Riwayat Tranx ID -->
-  <div class="modal fade" id="historyModal" tabindex="-1" aria-labelledby="historyModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="historyModalLabel">History Tranx ID</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div class="table-responsive">
-            <table class="table table-sm table-bordered mb-0">
-              <thead class="table-light">
-                <tr> 
-                  <th>Tanggal diterima</th>
-                  <th>Tranx ID</th>
-                  <th>Inv ID</th> 
-                  <th class="text-end">Inv Amt (Rp)</th>
-                </tr>
-              </thead>
-              <tbody id="history-modal-body"></tbody>
-              <tfoot class="table-group-divider fw-bold bg-light">
-                <tr>
-                  <td colspan="3">TOTAL</td>
-                  <td class="text-end" id="history-modal-total">Rp 0</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
+ 
   <!-- jQuery & Bootstrap JS -->
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -304,7 +265,7 @@
       if (!dataset || dataset.length === 0) {
         $tbody.append(`
           <tr>
-            <td colspan="7" class="text-center py-4 text-muted">
+            <td colspan="8" class="text-center py-4 text-muted">
               <i class="bi bi-search me-1"></i> Transaksi tidak ditemukan
             </td>
           </tr>
@@ -325,7 +286,7 @@
           const row = `
             <tr>
               <td class="ps-4">${formatDate(item.ReceivedDate)}</td>
-     
+              <td>${item.PaymentID || '-'}</td>
               <td><code class="text-dark">${item.TranxID}</code>
                 ${item.historyTranxID && item.historyTranxID.length > 0 ? (function() {
                   const histIdx = historyStore.length;
@@ -336,6 +297,8 @@
               <td><span class="badge bg-light text-dark border">${item.InvID || '-'}</span></td>
             
               <td class="text-end fw-semibold">${formatRupiah(invAmt)}</td> 
+            
+              <td class="text-end fw-semibold">${formatRupiah(payAmt)}</td>
               <td class="text-end pe-4 ${balanceClass}">${formatRupiah(balAmt)}</td>
             </tr>
           `;
@@ -363,7 +326,7 @@
 
       $('#detail-body').html(`
         <tr>
-          <td colspan="6" class="text-center py-5">
+          <td colspan="8" class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
               <span class="visually-hidden">Loading...</span>
             </div>
@@ -404,7 +367,7 @@
           console.error('Error fetching detail data:', textStatus, errorThrown);
           $('#detail-body').html(`
             <tr>
-              <td colspan="6" class="text-center py-4 text-danger">
+              <td colspan="8" class="text-center py-4 text-danger">
                 <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
                 Gagal mengambil data detail untuk Supplier <strong>${supplierId}</strong> dari API.
               </td>

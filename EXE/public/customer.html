@@ -76,7 +76,7 @@
       <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <span class="text-muted small fw-medium">Total Saldo Awal</span>
+            <span class="text-muted small fw-medium">Total GRN (un-Invoice)</span>
             <h3 class="fw-bold text-primary mt-2 mb-0" id="stat-total-saldo-awal">Rp 0</h3>
           </div>
         </div>
@@ -100,7 +100,7 @@
       <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <span class="text-muted small fw-medium">Sisa Utang (Net Result)</span>
+            <span class="text-muted small fw-medium">Sisa Utang (Hutang)</span>
             <h3 class="fw-bold text-danger mt-2 mb-0" id="stat-total-result">Rp 0</h3>
           </div>
         </div>
@@ -139,9 +139,10 @@
               <tr>
                 <th scope="col" class="ps-4">Supplier</th>
                 <th scope="col">ID Supplier</th>
-                <th scope="col" class="text-end">Saldo Awal</th>
-                
-                <th scope="col" class="text-end">Balance</th>
+                <th scope="col" class="text-end">GRN (un-Invoice)</th>
+                <th scope="col" class="text-end">Invoice</th>
+                <th scope="col" class="text-end">Payment</th>
+                <th scope="col" class="text-end">Hutang</th>
                 <th scope="col" class="text-center">Status</th>
                 <th scope="col" class="text-center pe-4">Aksi</th>
               </tr>
@@ -167,16 +168,21 @@
 
   <script>
     function formatRupiah(number) {
-      // return new Intl.NumberFormat('id-ID', {
-      //   style: 'currency',
-      //   currency: 'IDR',
-      //   maximumFractionDigits: 0
-      // }).format(number || 0);
       if (number === null || number === undefined) return 0;
       return new Intl.NumberFormat('id-ID', {
         maximumFractionDigits: 0
       }).format(number);
-     // return number;
+    }
+
+    function numClass(value) {
+      return Number(value) < 0 ? 'text-danger fw-semibold' : '';
+    }
+
+    function setStatCard(id, value, positiveClass) {
+      const $el = $('#' + id);
+      $el.text(formatRupiah(value));
+      $el.removeClass('text-primary text-dark text-success text-danger');
+      $el.addClass(Number(value) < 0 ? 'text-danger' : positiveClass);
     }
 
     let globalReportData = [];
@@ -196,19 +202,19 @@
       }
 
       const exportData = globalReportData.map(function(item) {
-        const saldoAwal = Number(item.saldoAwal) || 0;
-        const balance = Number(item.balance) || 0;
-        const paidTotal = Number(item.paidTotal || item.payment) || 0;
-        const resultValue = saldoAwal + balance - paidTotal;
+        const grnAmount = Number(item.GrnAmount) || 0;
+        const invoiceTotal = Number(item.totalInv) || 0;
+        const paidTotal = Number(item.totalPayment) || 0;
+        const hutang = Number(item.Hutang) || 0;
 
         return {
           Supplier: item.SupplierName || '',
           'ID Supplier': item.SupplierID || '',
-          'Saldo Awal': saldoAwal,
-          'Invoice Total': balance,
+          'GRN (un-Invoice)': grnAmount,
+          'Invoice Total': invoiceTotal,
           'Paid Total': paidTotal,
-          'Sisa (Result)': resultValue,
-          Status: resultValue === 0 ? 'Lunas' : (resultValue > 0 ? 'Sisa Utang' : 'Lebih Bayar')
+          'Hutang': hutang,
+          Status: hutang === 0 ? 'Lunas' : (hutang > 0 ? 'Sisa Utang' : 'Lebih Bayar')
         };
       });
 
@@ -232,41 +238,40 @@
     }
 
     function renderTable(dataset) {
-      console.log(dataset)
       const $tbody = $('#report-body');
       $tbody.empty();
 
-      let grandSaldoAwal = 0;
+      let grandGrn = 0;
       let grandInvoice = 0;
       let grandPaid = 0;
-      let grandResult = 0;
+      let grandHutang = 0;
 
       if (!dataset || dataset.length === 0) {
         $tbody.append(`
         <tr>
-          <td colspan="6" class="text-center py-4 text-muted">
+          <td colspan="8" class="text-center py-4 text-muted">
             <i class="bi bi-search me-1"></i> Data supplier tidak ditemukan
           </td>
         </tr>
       `);
       } else {
         $.each(dataset, function (index, item) {
-          const saldoAwal = Number(item.saldoAwal || 0);
-          const balance = Number(item.balance || 0);
-          const paidTotal = Number(item.paidTotal || item.payment || 0);
-          const resultValue = Number(item.balance || 0);
+          const grnAmount = Number(item.GrnAmount || 0);
+          const invoiceTotal = Number(item.totalInv || 0);
+          const paidTotal = Number(item.totalPayment || 0);
+          const hutang = Number(item.Hutang || 0);
 
-          grandSaldoAwal += saldoAwal;
-          grandInvoice += balance;
+          grandGrn += grnAmount;
+          grandInvoice += invoiceTotal;
           grandPaid += paidTotal;
-          grandResult += resultValue;
+          grandHutang += hutang;
 
           let statusBadge = '';
           let resultClass = '';
 
-          if (resultValue === 0) {
+          if (hutang === 0) {
             statusBadge = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Lunas</span>';
-          } else if (resultValue > 0) {
+          } else if (hutang > 0) {
             statusBadge = '<span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill">Sisa Utang</span>';
           } else {
             statusBadge = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill">Lebih Bayar</span>';
@@ -284,12 +289,13 @@
             <tr>
               <td class="ps-4 fw-semibold">${item.SupplierName || '-'}</td>
               <td><code class="text-secondary">${item.SupplierID || '-'}</code></td>
-              <td class="text-end text-muted">
-                 <a href="customer-detail-saldo-awal.html?id=${encodedId}&startDate=${encodeURIComponent(startDate || '')}&lastPaymentDate=${encodeURIComponent(lastPaymentDate || '')}&dbName=${encodeURIComponent(dbName || '')}">
-                      ${formatRupiah(saldoAwal)} <i class="bi bi-box-arrow-up-right"></i>
-                </a> 
-              </td> 
-              <td class="text-end ${resultClass}">${formatRupiah(resultValue)}</td>
+              <td class="text-end">
+                      ${formatRupiah(grnAmount)} 
+
+              </td>
+              <td class="text-end ${numClass(invoiceTotal)}">${formatRupiah(invoiceTotal)}</td>
+              <td class="text-end ${numClass(paidTotal)}">${formatRupiah(paidTotal)}</td>
+              <td class="text-end ${resultClass || numClass(hutang)}">${formatRupiah(hutang)}</td>
               <td class="text-center">${statusBadge}</td>
               <td class="text-center pe-4">
                 <a href="customer-detail.html?id=${encodedId}&startDate=${encodeURIComponent(startDate || '')}&endDate=${encodeURIComponent(endDate || '')}&lastPaymentDate=${encodeURIComponent(lastPaymentDate || '')}&dbName=${encodeURIComponent(dbName || '')}" class="btn btn-sm btn-outline-primary shadow-sm">
@@ -302,10 +308,10 @@
         });
       }
 
-      $('#foot-saldo-awal').text(formatRupiah(grandSaldoAwal));
+      $('#foot-saldo-awal').text(formatRupiah(grandGrn));
       $('#foot-invoice').text(formatRupiah(grandInvoice));
       $('#foot-paid').text(formatRupiah(grandPaid));
-      $('#foot-result').text(formatRupiah(grandResult));
+      $('#foot-result').text(formatRupiah(grandHutang));
 
       $('#search-count').text(`Menampilkan ${dataset ? dataset.length : 0} dari ${globalReportData.length} supplier`);
     }
@@ -323,7 +329,7 @@
 
       $('#report-body').html(`
       <tr>
-        <td colspan="6" class="text-center py-5">
+        <td colspan="8" class="text-center py-5">
           <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Loading...</span>
           </div>
@@ -349,21 +355,23 @@
           $('#stat-total-supplier').text(res.total || globalReportData.length);
 
           const summary = res.summary || {};
+          let initialGrn = summary.totalGrnAmount !== undefined
+            ? summary.totalGrnAmount
+            : globalReportData.reduce((acc, curr) => acc + (curr.GrnAmount || 0), 0);
           let initialInvoice = summary.totalInvoice !== undefined
             ? summary.totalInvoice
-            : globalReportData.reduce((acc, curr) => acc + (curr.invoice || 0), 0);
-          let initialPaid = summary.totalPayment !== undefined ? summary.totalPayment : 0;
-          let initialSaldoAwal = summary.totalSaldoAwal !== undefined
-            ? summary.totalSaldoAwal
-            : globalReportData.reduce((acc, curr) => acc + (curr.saldoAwal || 0), 0);
-          let initialResult = summary.totalBalance !== undefined
-            ? summary.totalBalance
-            : (initialSaldoAwal + initialInvoice - initialPaid);
+            : globalReportData.reduce((acc, curr) => acc + (curr.totalInv || 0), 0);
+          let initialPaid = summary.totalPayment !== undefined
+            ? summary.totalPayment
+            : globalReportData.reduce((acc, curr) => acc + (curr.totalPayment || 0), 0);
+          let initialHutang = summary.totalHutang !== undefined
+            ? summary.totalHutang
+            : globalReportData.reduce((acc, curr) => acc + (curr.Hutang || 0), 0);
 
-          $('#stat-total-saldo-awal').text(formatRupiah(initialSaldoAwal));
-          $('#stat-total-invoice').text(formatRupiah(initialInvoice));
-          $('#stat-total-paid').text(formatRupiah(initialPaid));
-          $('#stat-total-result').text(formatRupiah(initialResult));
+          setStatCard('stat-total-saldo-awal', initialGrn, 'text-primary');
+          setStatCard('stat-total-invoice', initialInvoice, 'text-dark');
+          setStatCard('stat-total-paid', initialPaid, 'text-success');
+          setStatCard('stat-total-result', initialHutang, 'text-danger');
 
           renderTable(globalReportData);
         })
@@ -371,7 +379,7 @@
           console.error('Error fetching data:', textStatus, errorThrown);
           $('#report-body').html(`
           <tr>
-            <td colspan="6" class="text-center py-4 text-danger">
+            <td colspan="8" class="text-center py-4 text-danger">
               <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
               Gagal mengambil data dari server (<code>${apiUrl}</code>).
             </td>

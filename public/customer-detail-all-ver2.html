@@ -127,13 +127,6 @@
       return `<span class="${numClass(number)}">${formatRupiah(number)}</span>`;
     }
 
-    function typeBadge(typeId) {
-      if (typeId === 'GRN') return '<span class="badge bg-info-subtle text-info border border-info-subtle">GRN</span>';
-      if (typeId === 'INV') return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">INV</span>';
-      if (typeId === 'PAYMENT') return '<span class="badge bg-success-subtle text-success border border-success-subtle">PAYMENT</span>';
-      return `<span class="badge bg-light text-dark border">${typeId || '-'}</span>`;
-    }
-
     let globalCustomerData = [];
 
     function renderTable(dataset) {
@@ -219,7 +212,7 @@
         });
     }
 
-    // Ambil detail transaksi (GRN/INV/PAYMENT) per supplier via AJAX, dibungkus Promise agar bisa di-await berurutan
+    // Ambil satu Invoice (beserta detail transaksi) via AJAX, dibungkus Promise agar bisa di-await berurutan
     function fetchSaldoAwalForSupplier(dbName, supplierId, startDate, endDate, lastPaymentDate) {
       const apiUrl = `http://localhost:3000/${dbName}/customer/detail` +
         `?supplierId=${encodeURIComponent(supplierId)}` +
@@ -230,20 +223,9 @@
       return $.get(apiUrl).then(function (response) {
         const res = typeof response === 'string' ? JSON.parse(response) : response;
         return {
+          saldoAwal: (res.summary && res.summary.totalSaldoAwal) || 0,
           detail: res.data || []
         };
-      });
-    }
-
-    // Hitung balance berjalan (cash flow): baris ini = baris sebelumnya + (GRN + Invoice - Payment)
-    function computeRunningBalance(detail) {
-      let running = 0;
-      return (detail || []).map(function (r) {
-        const grnAmt = Number(r.GrnAmount || 0);
-        const invAmt = Number(r.totalInv || 0);
-        const payAmt = Number(r.totalPayment || 0);
-        running += (grnAmt + invAmt) - payAmt;
-        return Object.assign({}, r, { grnAmt, invAmt, payAmt, runningBalance: running });
       });
     }
 
@@ -252,44 +234,33 @@
         return '<p class="text-muted small mb-0">Tidak ada detail transaksi.</p>';
       }
 
-      const rowsData = computeRunningBalance(detail);
-
-      const rows = rowsData.map(function (r) {
-        const isGrn = r.TypeID === 'GRN';
-        const tranxId = isGrn ? (r.Id || '-') : '-';
-        const invId = !isGrn ? (r.Id || '-') : '-';
-
+      const rows = detail.map(function (r) {
         return `
           <tr>
-            <td>${r.date ? new Date(r.date).toLocaleDateString('id-ID') : '-'}</td>
-            <td class="text-center">${typeBadge(r.TypeID)}</td>
-            <td>${tranxId}</td>
-            <td>${invId}</td>
-            <td>${r.paymentId || '-'}</td>
-            <td class="text-end">${formatRupiahColored(r.grnAmt)}</td>
-            <td class="text-end">${formatRupiahColored(r.invAmt)}</td>
-            <td class="text-end">${formatRupiahColored(r.payAmt)}</td>
-            <td class="text-end">${formatRupiahColored(r.runningBalance)}</td>
+            <td>${r.ReceivedDate ? new Date(r.ReceivedDate).toLocaleDateString('id-ID') : '-'}</td>
+            <td>${r.TranxID || '-'}</td>
+            <td>${r.InvID || '-'}</td>
+            <td class="text-end">${formatRupiahColored(r.Invoice)}</td>
+            <td>${r.PaymentID || '-'}</td>
+            <td class="text-end">${formatRupiahColored(r.Payment)}</td>
+            <td class="text-end">${formatRupiahColored(r.balance)}</td>
           </tr>
         `;
       }).join('');
 
-      const totalGrn = rowsData.reduce((sum, r) => sum + r.grnAmt, 0);
-      const totalInvoice = rowsData.reduce((sum, r) => sum + r.invAmt, 0);
-      const totalPayment = rowsData.reduce((sum, r) => sum + r.payAmt, 0);
-      const finalBalance = rowsData.length ? rowsData[rowsData.length - 1].runningBalance : 0;
+      const totalInvoice = detail.reduce((sum, r) => sum + (r.Invoice || 0), 0);
+      const totalPayment = detail.reduce((sum, r) => sum + (r.Payment || 0), 0);
+      const totalBalance = detail.reduce((sum, r) => sum + (r.balance || 0), 0);
 
       return `
         <table class="table table-sm table-bordered mb-0">
           <thead class="table-light">
             <tr>
-              <th>Tanggal</th>
-              <th class="text-center">Type</th>
-              <th>Tranx ID</th>
-              <th>Inv ID</th>
-              <th>Payment ID</th>
-              <th class="text-end">GRN</th>
+              <th>Received Date</th>
+              <th>TranxID</th>
+              <th>InvID</th>
               <th class="text-end">Invoice</th>
+              <th>PaymentID</th>
               <th class="text-end">Payment</th>
               <th class="text-end">Balance</th>
             </tr>
@@ -297,18 +268,18 @@
           <tbody>${rows}</tbody>
           <tfoot class="table-light fw-semibold">
             <tr>
-              <td colspan="5" class="text-end">Total</td>
-              <td class="text-end">${formatRupiahColored(totalGrn)}</td>
+              <td colspan="3" class="text-end">Total</td>
               <td class="text-end">${formatRupiahColored(totalInvoice)}</td>
+              <td></td>
               <td class="text-end">${formatRupiahColored(totalPayment)}</td>
-              <td class="text-end">${formatRupiahColored(finalBalance)}</td>
+              <td class="text-end">${formatRupiahColored(totalBalance)}</td>
             </tr>
           </tfoot>
         </table>
       `;
     }
 
-    // Waterfall: tarik detail transaksi satu-per-satu (berurutan, bukan paralel) untuk setiap supplier
+    // Waterfall: tarik Invoice & detail satu-per-satu (berurutan, bukan paralel) untuk setiap supplier
     async function fetchSaldoAwalWaterfall() {
       const urlParams = new URLSearchParams(window.location.search);
       const dbName = urlParams.get('dbName') || 'EpixFIN_RMM';
@@ -341,18 +312,14 @@
         try {
           // await di dalam loop membuat request berjalan satu-per-satu, tidak paralel
           const { detail } = await fetchSaldoAwalForSupplier(dbName, item.SupplierID, startDate, endDate, lastPaymentDate);
-          console.log('Fetched detail for', item.SupplierID, { detail });
-
-          const rowsData = computeRunningBalance(detail);
-          const finalBalance = rowsData.length ? rowsData[rowsData.length - 1].runningBalance : 0;
-
-          item.saldoAwal = finalBalance;
+          console.log('Fetched Invoice for', item.SupplierID, { detail });
+          item.saldoAwal = detail.reduce((sum, r) => sum + (r.Invoice || 0), 0);
           item.saldoAwalDetail = detail;
           $cell.removeClass('text-muted').removeClass('text-danger fw-semibold').addClass(numClass(item.saldoAwal)).text(formatRupiah(item.saldoAwal));
           $detailContainer.html(renderDetailTable(detail));
           $detailBtn.prop('disabled', false);
         } catch (err) {
-          console.error('Gagal ambil detail untuk', item.SupplierID, err);
+          console.error('Gagal ambil Invoice untuk', item.SupplierID, err);
           $cell.removeClass('text-muted').addClass('text-danger').text('Error');
         }
       }
@@ -370,39 +337,35 @@
       });
 
       if (suppliersWithDetail.length === 0) {
-        alert('Tarik data terlebih dahulu sebelum export.');
+        alert('Tarik data Invoice terlebih dahulu sebelum export.');
         return;
       }
 
       const aoa = [];
 
       suppliersWithDetail.forEach(function (item) {
-        const rowsData = computeRunningBalance(item.saldoAwalDetail || []);
-        const totalGrn = rowsData.reduce((sum, r) => sum + r.grnAmt, 0);
-        const totalInvoice = rowsData.reduce((sum, r) => sum + r.invAmt, 0);
-        const totalPayment = rowsData.reduce((sum, r) => sum + r.payAmt, 0);
-        const finalBalance = rowsData.length ? rowsData[rowsData.length - 1].runningBalance : 0;
+        const detail = item.saldoAwalDetail || [];
+        const totalInvoice = detail.reduce((sum, r) => sum + (r.Invoice || 0), 0);
+        const totalPayment = detail.reduce((sum, r) => sum + (r.Payment || 0), 0);
+        const totalBalance = '';
 
         aoa.push([`Supplier: ${item.SupplierName || '-'} (${item.SupplierID || '-'})`]);
-        aoa.push([`Balance: ${item.saldoAwal || 0}`]);
-        aoa.push(['Tanggal', 'Type', 'Tranx ID', 'Inv ID', 'Payment ID', 'GRN', 'Invoice', 'Payment', 'Balance']);
+        aoa.push([`Invoice: ${item.saldoAwal || 0}`]);
+        aoa.push(['Received Date', 'TranxID', 'InvID', 'Invoice', 'PaymentID', 'Payment', 'Balance']);
 
-        rowsData.forEach(function (r) {
-          const isGrn = r.TypeID === 'GRN';
+        detail.forEach(function (r) {
           aoa.push([
-            r.date ? new Date(r.date).toLocaleDateString('id-ID') : '',
-            r.TypeID || '',
-            isGrn ? (r.Id || '') : '',
-            !isGrn ? (r.Id || '') : '',
-            r.paymentId || '',
-            r.grnAmt,
-            r.invAmt,
-            r.payAmt,
-            r.runningBalance
+            r.ReceivedDate ? new Date(r.ReceivedDate).toLocaleDateString('id-ID') : '',
+            r.TranxID || '',
+            r.InvID || '',
+            r.Invoice || 0,
+            r.PaymentID || '',
+            r.Payment || 0,
+            r.balance || 0
           ]);
         });
 
-        aoa.push(['', '', '', '', 'Total', totalGrn, totalInvoice, totalPayment, finalBalance]);
+        aoa.push(['', '', 'Total', totalInvoice, '', totalPayment, totalBalance]);
         // Jeda beberapa baris kosong sebagai pemisah antar grup supplier
         aoa.push([]);
         aoa.push([]);

@@ -1,0 +1,70 @@
+{
+    "status": "ok",
+    "requestedDb": "EpixFIN_RMM",
+    "filter": {
+        "supplierId": "A.0011",
+        "startDate": "2026-01-01",
+        "endDate": "2026-09-18",
+        "lastPaymentDate": "2026-09-18"
+    },
+    "total": 5,
+    "summary": {
+        "totalGrn": 0,
+        "totalInvoice": 34110000,
+        "totalPayment": 25560000,
+        "totalBalance": 8550000
+    },
+    "data": [
+        {
+            "TypeID": "INV",
+            "Id": "HO20420",
+            "paymentId": "",
+            "date": "2026-05-05T00:00:00.000Z",
+            "GrnAmount": 0,
+            "totalInv": 17010000,
+            "totalPayment": 0,
+            "balance": 0
+        },
+        {
+            "TypeID": "INV",
+            "Id": "HO20713",
+            "paymentId": "",
+            "date": "2026-08-31T00:00:00.000Z",
+            "GrnAmount": 0,
+            "totalInv": 17100000,
+            "totalPayment": 0,
+            "balance": 0
+        },
+        {
+            "TypeID": "PAYMENT",
+            "Id": "HO20420",
+            "paymentId": "APP13582",
+            "date": "2026-05-05T00:00:00.000Z",
+            "GrnAmount": 0,
+            "totalInv": 0,
+            "totalPayment": 6000000,
+            "balance": 0
+        },
+        {
+            "TypeID": "PAYMENT",
+            "Id": "HO20420",
+            "paymentId": "APP13623",
+            "date": "2026-05-05T00:00:00.000Z",
+            "GrnAmount": 0,
+            "totalInv": 0,
+            "totalPayment": 11010000,
+            "balance": 0
+        },
+        {
+            "TypeID": "PAYMENT",
+            "Id": "HO20713",
+            "paymentId": "APP13895",
+            "date": "2026-08-31T00:00:00.000Z",
+            "GrnAmount": 0,
+            "totalInv": 0,
+            "totalPayment": 8550000,
+            "balance": 0
+        }
+    ],
+    "query": "\n        Declare @supplierId varchar(50)\n        Declare @startDate DateTime\n        Declare @endDate DateTime\n        Declare @lastPaymentDate DateTime\n\n        Set @supplierId = 'A.0011'\n        Set @startDate = '2026-01-01'\n        Set @endDate = '2026-09-18'\n        set @lastPaymentDate = '2026-09-18'\n         \n       \n select x1.* from (\n\t-- DATA GRN\n \tselect 'GRN' as 'TypeID', g.TranxID as 'Id', '' as 'paymentId', g.ReceivedDate as 'date',  \n\t\tg.TotalAmount 'GrnAmount',  0 as 'totalInv',  0 'totalPayment' \n\tfrom FinMsGRN as g\n\tleft join FinApInvoiceDetail as id on id.TranxID = g.TranxID\n\twhere  (g.ReceivedDate between  @startDate and @endDate)\n\t\tand id.InvID is null and  g.SupplierID = @supplierId\n \n\tunion all\n\n\tselect a1.* from (\n\t\t-- DATA INV\n\t\tselect \n\t\t\t'INV' as 'TypeID', t1.InvID as 'Id' , '' as 'PaymentID', i.InvDate as 'date', \n\t\t\t0 as 'GrnAmount',   t1.totalInvoice 'totalInv',   0 as 'totalPayment'\n\t\tfrom (\n\t\t\t\tselect   id.InvID, sum(id.InvAmt) as 'totalInvoice'\n\t\t\t\tfrom FinMsGRN as g\n\t\t\t\tleft join FinApInvoiceDetail as id on id.TranxID = g.TranxID\n\t\t\t\twhere  g.ReceivedDate between  @startDate and @endDate\n\t\t\t\t\tand g.SupplierID = @supplierId\n\t\t\t\tgroup by id.InvID \n\t\t) as t1\n\t\tjoin FinApInvoice as i on i.InvID = t1.InvID \n\t\twhere  i.InvDate between @startDate and @endDate\n\t\t\t\n\t\tunion all \n\n\t\t-- DATA PAYMENT\n\t\tselect \n\t\t\t'PAYMENT' as 'TypeID', t1.InvID as 'Id' ,  pd.PaymentID, i.InvDate as 'date', \n\t\t\t0 as 'GrnAmount',  0 'totalInv',  (pd.PayAmt+pd.AmtAdj) as 'totalPayment'\n\n\t\tfrom (\n\t\t\t\tselect   id.InvID, sum(id.InvAmt) as 'totalInvoice'\n\t\t\t\tfrom FinMsGRN as g\n\t\t\t\tleft join FinApInvoiceDetail as id on id.TranxID = g.TranxID\n\t\t\t\twhere  g.ReceivedDate between  @startDate and @endDate\n\t\t\t\t\tand g.SupplierID = @supplierId\n\t\t\t\tgroup by id.InvID \n\t\t\t) as t1\n\t\tleft join FinApInvoice as i on i.InvID = t1.InvID\n\t\tleft join FinApPaymentDetail as pd on pd.InvID = t1.InvID\n\t\tleft join FinApPayment as p on  pd.PaymentID = p.PaymentID\n\n\t\twhere p.Status = 'CLOSED'   and p.PaymentDate between @startDate and  @lastPaymentDate\n\t) a1 \n\n) as x1 \n order by x1.TypeID asc , x1.Id ASC, x1.date ASC\n      "
+}

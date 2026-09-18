@@ -58,7 +58,7 @@
           <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <span class="text-muted small fw-medium">Total GRN (Blm Invoice)</span>
+            <span class="text-muted small fw-medium">Total Saldo Awal</span>
             <h3 class="fw-bold text-dark mt-2 mb-0" id="stat-total-saldo-awal">Rp 0</h3>
           </div>
         </div>
@@ -113,14 +113,12 @@
           <table class="table table-hover align-middle mb-0" id="detail-table">
             <thead class="table-light">
               <tr>
-                <th scope="col" class="ps-4">Tanggal</th>
-                <th scope="col" class="text-center">Type</th>
+                <th scope="col" class="ps-4">Tanggal Terima</th>
                 <th scope="col">Tranx ID</th>
                 <th scope="col">Inv ID</th>
-                <th scope="col">Payment ID</th>
-                <th scope="col" class="text-end">GRN (Rp)</th>
-                <th scope="col" class="text-end">Invoice (Rp)</th>
-                <th scope="col" class="text-end">Payment (Rp)</th>
+                 <th scope="col">Payment ID</th> 
+                <th scope="col" class="text-end">Invoice (Rp)</th> 
+                <th scope="col" class="text-end">Payment (Rp)</th> 
                 <th scope="col" class="text-end pe-4">Balance (Rp)</th>
               </tr>
             </thead>
@@ -130,8 +128,7 @@
             </tbody>
             <tfoot class="table-group-divider fw-bold bg-light">
               <tr>
-                <td colspan="5" class="ps-4">TOTAL (FILTERED)</td>
-                <td class="text-end" id="foot-grn">Rp 0</td>
+                <td colspan="4" class="ps-4">TOTAL (FILTERED)</td>
                 <td class="text-end" id="foot-invoice">Rp 0</td> 
                 <td class="text-end" id="foot-payment">Rp 0</td> 
                 <td class="text-end pe-4" id="foot-balance">Rp 0</td>
@@ -189,10 +186,8 @@
       return new Intl.NumberFormat('id-ID', {
         maximumFractionDigits: 0
       }).format(number);
-    }
 
-    function numClass(value) {
-      return Number(value) < 0 ? 'text-danger fw-semibold' : '';
+     
     }
 
     // Helper Format Tanggal ISO ke Lokal (YYYY-MM-DD)
@@ -204,13 +199,6 @@
         month: '2-digit',
         day: '2-digit'
       });
-    }
-
-    function typeBadge(typeId) {
-      if (typeId === 'GRN') return '<span class="badge bg-info-subtle text-info border border-info-subtle">GRN</span>';
-      if (typeId === 'INV') return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">INV</span>';
-      if (typeId === 'PAYMENT') return '<span class="badge bg-success-subtle text-success border border-success-subtle">PAYMENT</span>';
-      return `<span class="badge bg-light text-dark border">${typeId || '-'}</span>`;
     }
 
     function getSupplierIdFromUrl() {
@@ -235,40 +223,26 @@
         return;
       }
 
-      let runningBalance = 0;
       const exportData = globalDetailData.map(function(item) {
-        const isPayment = item.TypeID === 'PAYMENT';
-        const isGrn = item.TypeID === 'GRN';
-        const grnAmt = Number(item.GrnAmount) || 0;
-        const invAmt = Number(item.totalInv) || 0;
-        const payAmt = Number(item.totalPayment) || 0;
-
-        runningBalance += (grnAmt + invAmt) - payAmt;
-
         return {
-          'Tanggal': item.date ? new Date(item.date) : '',
-          'Type': item.TypeID || '',
-          'Tranx ID': isGrn ? (item.Id || '') : '',
-          'Inv ID': (!isGrn) ? (item.Id || '') : '',
-          'Payment ID': item.paymentId || '',
-          'GRN (Rp)': grnAmt,
-          'Invoice (Rp)': invAmt,
-          'Payment (Rp)': payAmt,
-          'Balance (Rp)': runningBalance
+          'Tanggal Terima': item.ReceivedDate ? new Date(item.ReceivedDate) : '',
+          'Tranx ID': item.TranxID || '',
+          'Inv ID': item.InvID || '',
+          'Payment ID': item.PaymentID || '',
+          'Invoice (Rp)': Number(item.Invoice) || 0, 
+          'Balance (Rp)': Number(item.balance) || 0
         };
       });
 
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       worksheet['!cols'] = [
         { wch: 16 },
-        { wch: 10 },
+        { wch: 20 },
         { wch: 18 },
         { wch: 18 },
         { wch: 18 },
-        { wch: 16 },
-        { wch: 16 },
-        { wch: 16 },
-        { wch: 16 }
+        { wch: 18 },
+        { wch: 18 }
       ];
 
       const workbook = XLSX.utils.book_new();
@@ -284,57 +258,47 @@
       $tbody.empty();
       historyStore = [];
 
-      let calcGrn = 0;
       let calcInvoice = 0;
       let calcPayment = 0;
-      let runningBalance = 0;
+      let calcBalance = 0;
 
       if (!dataset || dataset.length === 0) {
         $tbody.append(`
           <tr>
-            <td colspan="9" class="text-center py-4 text-muted">
+            <td colspan="8" class="text-center py-4 text-muted">
               <i class="bi bi-search me-1"></i> Transaksi tidak ditemukan
             </td>
           </tr>
         `);
       } else {
         $.each(dataset, function(index, item) {
-          const grnAmt = Number(item.GrnAmount || 0);
-          const invAmt = Number(item.totalInv || 0);
-          const payAmt = Number(item.totalPayment || 0);
+          const invAmt = item.Invoice || 0;
+          const payAmt = item.Payment || 0;
+          const balAmt = item.balance || 0;
 
-          calcGrn += grnAmt;
           calcInvoice += invAmt;
           calcPayment += payAmt;
-
-          // Balance berjalan (running/cumulative): saldo baris ini = saldo baris sebelumnya + (GRN + Invoice - Payment)
-          runningBalance += (grnAmt + invAmt) - payAmt;
-          const balAmt = runningBalance;
-
-          const isPayment = item.TypeID === 'PAYMENT';
-          const isGrn = item.TypeID === 'GRN';
-          const tranxId = isGrn ? (item.Id || '-') : '-';
-          const invId = !isGrn ? (item.Id || '-') : '-';
+          calcBalance += balAmt;
 
           // Highlight jika nilai balance minus (kelebihan bayar / kredit)
           const balanceClass = balAmt < 0 ? 'text-danger fw-bold' : (balAmt > 0 ? 'fw-semibold' : 'text-muted');
 
           const row = `
             <tr>
-              <td class="ps-4">${formatDate(item.date)}</td>
-              <td class="text-center">${typeBadge(item.TypeID)}</td>
-              <td><code class="text-dark">${tranxId}</code>
+              <td class="ps-4">${formatDate(item.ReceivedDate)}</td>
+              <td>${item.PaymentID || '-'}</td>
+              <td><code class="text-dark">${item.TranxID}</code>
                 ${item.historyTranxID && item.historyTranxID.length > 0 ? (function() {
                   const histIdx = historyStore.length;
                   historyStore.push(item.historyTranxID);
                   return `<button type="button" class="btn btn-link btn-sm p-0 d-block" onclick="showHistoryModal(${histIdx})"><i class="bi bi-clock-history me-1"></i>History (${item.historyTranxID.length})</button>`;
                 })() : ''}
                 </td>
-              <td><span class="badge bg-light text-dark border">${invId}</span></td>
-              <td>${item.paymentId || '-'}</td>
-              <td class="text-end ${numClass(grnAmt)}">${formatRupiah(grnAmt)}</td>
-              <td class="text-end fw-semibold ${numClass(invAmt)}">${formatRupiah(invAmt)}</td>
-              <td class="text-end fw-semibold ${numClass(payAmt)}">${formatRupiah(payAmt)}</td>
+              <td><span class="badge bg-light text-dark border">${item.InvID || '-'}</span></td>
+            
+              <td class="text-end fw-semibold">${formatRupiah(invAmt)}</td> 
+            
+              <td class="text-end fw-semibold">${formatRupiah(payAmt)}</td>
               <td class="text-end pe-4 ${balanceClass}">${formatRupiah(balAmt)}</td>
             </tr>
           `;
@@ -342,11 +306,8 @@
         });
       }
 
-      // Update Footer Total Sesuai Filter (search)
-      $('#foot-grn').text(formatRupiah(calcGrn));
-      $('#foot-invoice').text(formatRupiah(calcInvoice));
-      $('#foot-payment').text(formatRupiah(calcPayment));
-      $('#foot-balance').text(formatRupiah(runningBalance));
+      // Update Footer Total Sesuai Filter
+     
 
       $('#search-count').text(`Menampilkan ${dataset ? dataset.length : 0} dari ${globalDetailData.length} transaksi`);
     }
@@ -365,7 +326,7 @@
 
       $('#detail-body').html(`
         <tr>
-          <td colspan="9" class="text-center py-5">
+          <td colspan="8" class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
               <span class="visually-hidden">Loading...</span>
             </div>
@@ -383,15 +344,20 @@
           if (res.filter) {
             $('#report-period').text(`${res.filter.startDate} s/d ${res.filter.endDate}`);
           }
-          $('#last-payment').text((res.filter && res.filter.lastPaymentDate) || '-');
+          $('#last-payment').text(res.filter.lastPaymentDate || '-');
           $('#q').text(res.query || '');
 
           $('#stat-total-record').text(res.total || 0);
           if (res.summary) {
-            $('#stat-total-saldo-awal').text(formatRupiah(res.summary.totalGrn));
+            $('#stat-total-saldo-awal').text(formatRupiah(res.summary.totalSaldoAwal));
             $('#stat-total-invoice').text(formatRupiah(res.summary.totalInvoice));
             $('#stat-total-payment').text(formatRupiah(res.summary.totalPayment));
             $('#stat-total-balance').text(formatRupiah(res.summary.totalBalance));
+  $('#saldo-awal-body').text(formatRupiah(res.summary.totalSaldoAwal));
+ 
+            $('#foot-invoice').text(formatRupiah(res.summary.totalInvoice));
+            $('#foot-payment').text(formatRupiah(res.summary.totalPayment));
+            $('#foot-balance').text(formatRupiah(res.summary.totalBalance));
           }
 
           globalDetailData = res.data || [];
@@ -401,7 +367,7 @@
           console.error('Error fetching detail data:', textStatus, errorThrown);
           $('#detail-body').html(`
             <tr>
-              <td colspan="9" class="text-center py-4 text-danger">
+              <td colspan="8" class="text-center py-4 text-danger">
                 <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
                 Gagal mengambil data detail untuk Supplier <strong>${supplierId}</strong> dari API.
               </td>
@@ -419,8 +385,9 @@
         const keyword = $(this).val().toLowerCase().trim();
 
         const filteredData = globalDetailData.filter(function(item) {
-          return (item.Id && item.Id.toLowerCase().includes(keyword)) ||
-                 (item.paymentId && item.paymentId.toLowerCase().includes(keyword));
+          return (item.TranxID && item.TranxID.toLowerCase().includes(keyword)) ||
+                 (item.InvID && item.InvID.toLowerCase().includes(keyword)) ||
+                 (item.PaymentID && item.PaymentID.toLowerCase().includes(keyword));
         });
 
         renderTable(filteredData);

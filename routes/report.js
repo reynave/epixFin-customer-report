@@ -25,8 +25,11 @@ router.get('/', (req, res) => {
   });
 });
 router.get('/getCustomer', reportController.getCustomer); 
-router.get('/customer', reportController.getReportPage); 
+router.get('/customer', reportController.getReportPage);  
+
 router.get('/customer/detail', reportController.getReportDetail);
+router.get('/customer/detail_ver2', reportController.getReportDetail_ver2);
+
 //router.get('/customer/unInvoiceGrn', reportController.getUninvoiceGrn);
  
 router.get('/customer/detail/saldo-awal', reportController.getReportDetailSaldoAwal);

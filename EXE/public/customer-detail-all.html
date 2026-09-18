@@ -119,6 +119,14 @@
       }).format(number);
     }
 
+    function numClass(value) {
+      return Number(value) < 0 ? 'text-danger fw-semibold' : '';
+    }
+
+    function formatRupiahColored(number) {
+      return `<span class="${numClass(number)}">${formatRupiah(number)}</span>`;
+    }
+
     let globalCustomerData = [];
 
     function renderTable(dataset) {
@@ -232,10 +240,10 @@
             <td>${r.ReceivedDate ? new Date(r.ReceivedDate).toLocaleDateString('id-ID') : '-'}</td>
             <td>${r.TranxID || '-'}</td>
             <td>${r.InvID || '-'}</td>
-            <td class="text-end">${formatRupiah(r.Invoice)}</td>
+            <td class="text-end">${formatRupiahColored(r.Invoice)}</td>
             <td>${r.PaymentID || '-'}</td>
-            <td class="text-end">${formatRupiah(r.Payment)}</td>
-            <td class="text-end">${formatRupiah(r.balance)}</td>
+            <td class="text-end">${formatRupiahColored(r.Payment)}</td>
+            <td class="text-end">${formatRupiahColored(r.balance)}</td>
           </tr>
         `;
       }).join('');
@@ -261,10 +269,10 @@
           <tfoot class="table-light fw-semibold">
             <tr>
               <td colspan="3" class="text-end">Total</td>
-              <td class="text-end">${formatRupiah(totalInvoice)}</td>
+              <td class="text-end">${formatRupiahColored(totalInvoice)}</td>
               <td></td>
-              <td class="text-end">${formatRupiah(totalPayment)}</td>
-              <td class="text-end"></td>
+              <td class="text-end">${formatRupiahColored(totalPayment)}</td>
+              <td class="text-end">${formatRupiahColored(totalBalance)}</td>
             </tr>
           </tfoot>
         </table>
@@ -285,6 +293,7 @@
         return;
       }
 
+       $('#btn-export-excel').prop('disabled', true);
       const $btn = $('#btn-fetch-saldo-awal');
       $btn.prop('disabled', true);
 
@@ -306,7 +315,7 @@
           console.log('Fetched Invoice for', item.SupplierID, { detail });
           item.saldoAwal = detail.reduce((sum, r) => sum + (r.Invoice || 0), 0);
           item.saldoAwalDetail = detail;
-          $cell.removeClass('text-muted').text(formatRupiah(item.saldoAwal));
+          $cell.removeClass('text-muted').removeClass('text-danger fw-semibold').addClass(numClass(item.saldoAwal)).text(formatRupiah(item.saldoAwal));
           $detailContainer.html(renderDetailTable(detail));
           $detailBtn.prop('disabled', false);
         } catch (err) {
@@ -368,7 +377,7 @@
 
       const dbName = new URLSearchParams(window.location.search).get('dbName') || 'EpixFIN_RMM';
       const safeDbName = dbName.replace(/[^a-z0-9_-]/gi, '_');
-      XLSX.writeFile(workbook, `detail-saldo-awal-${safeDbName}.xlsx`);
+      XLSX.writeFile(workbook, `detail-all-${safeDbName}.xlsx`);
     }
 
     // Prefill filter tanggal dari query params URL (startDate, endDate, lastPaymentDate)

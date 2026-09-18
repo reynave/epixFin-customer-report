@@ -192,7 +192,7 @@ exports.getReportPage = async (req, res) => {
           select pd.InvID, SUM(pd.PayAmt + pd.AmtAdj) as 'TotalPaid'
           from FinApPaymentDetail as pd
           join FinApPayment as p on p.PaymentID = pd.PaymentID
-          where p.PaymentDate < @lastPaymentDate 
+          where p.PaymentDate between '${start}' and @lastPaymentDate 
           and p.Status = 'CLOSED'
           group by pd.InvID
         ) b on b.InvID = a.InvID
@@ -297,8 +297,16 @@ exports.getReportDetail = async (req, res) => {
           a.TotalAmount,
           a.InvID, 
           ISNULL(a.InvAmt,a.TotalAmount) as 'Invoice', 
-          b.TotalPaid as 'Payment', 
-          a.InvAmt - ISNULL(b.TotalPaid, 0) as 'Outstanding'
+        
+		   CASE 
+			WHEN a.InvAmt < 0 THEN 0 
+			ELSE   b.TotalPaid END
+		as 'Payment',
+
+		  CASE 
+			WHEN a.InvAmt < 0 THEN 0 
+			ELSE  a.InvAmt - ISNULL(b.TotalPaid, 0) END
+		as 'Outstanding'
         from (
           select g.TranxID, g.ReceivedDate, g.TotalAmount, id.InvID, id.InvAmt
           from FinMsGRN as g
@@ -311,13 +319,13 @@ exports.getReportDetail = async (req, res) => {
           from FinApPaymentDetail as pd
           join FinApPayment as p on p.PaymentID = pd.PaymentID
           where pd.SupplierID = '${supplierId}' 
-          and p.PaymentDate < '${lastPay}' 
+          and p.PaymentDate between '${start}' and '${lastPay}' 
           and p.Status = 'CLOSED'
           group by pd.InvID
         ) b on b.InvID = a.InvID
         where 
-          ((a.InvAmt - ISNULL(b.TotalPaid, 0)) > 0 or ISNULL(b.TotalPaid, 0) <= 0 ) 
-          or   ISNULL(a.InvAmt,a.TotalAmount) < 0 
+         ((a.InvAmt - ISNULL(b.TotalPaid, 0)) > 0 or ISNULL(b.TotalPaid, 0) <= 0 ) 
+         or   ISNULL(a.InvAmt,a.TotalAmount) < 0 
         order by a.ReceivedDate ASC, a.TranxID ASC
       `;
     const result = await pool.query(q);

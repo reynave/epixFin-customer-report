@@ -26,6 +26,12 @@
         <p class="text-muted mb-0">
           Database: <span id="db-name" class="fw-bold text-dark">-</span>
         </p>
+        <p class="mb-0">
+          Total Saldo Awal: <span id="total-saldo-awal" class="fw-bold text-dark">-</span> |
+          Total Invoice: <span id="total-invoice" class="fw-bold text-dark">-</span> |
+          Total Payment: <span id="total-payment" class="fw-bold text-dark">-</span> |
+          Total Balance: <span id="total-balance" class="fw-bold text-dark">-</span>
+        </p>
       </div>
     </div>
 
@@ -89,7 +95,10 @@
               <tr>
                 <th scope="col" class="ps-4">Supplier</th>
                 <th scope="col">ID Supplier</th>
-                <th scope="col" class="text-end">Invoice</th>
+                <th scope="col" class="text-end">Saldo Awal</th>
+                <th scope="col" class="text-end">Total Invoice</th>
+                <th scope="col" class="text-end">Total Payment</th>
+                <th scope="col" class="text-end">Total Balance</th>
                 <th scope="col" class="text-center pe-4">Aksi</th>
               </tr>
             </thead>
@@ -136,6 +145,24 @@
 
     let globalCustomerData = [];
 
+    // Jumlahkan saldoAwal, totalInvoice, totalPayment, totalBalance dari semua supplier
+    // yang sudah diproses (dari summary hasil API), lalu update tampilan di header
+    function updateGrandTotals() {
+      const totals = globalCustomerData.reduce(function (acc, item) {
+        const s = item.summary || {};
+        acc.saldoAwal += Number(item.saldoAwal) || 0;
+        acc.totalInvoice += Number(s.totalInvoice) || 0;
+        acc.totalPayment += Number(s.totalPayment) || 0;
+        acc.totalBalance += Number(s.totalBalance) || 0;
+        return acc;
+      }, { saldoAwal: 0, totalInvoice: 0, totalPayment: 0, totalBalance: 0 });
+
+      $('#total-saldo-awal').removeClass('text-danger fw-bold').addClass(numClass(totals.saldoAwal)).text(formatRupiah(totals.saldoAwal));
+      $('#total-invoice').removeClass('text-danger fw-bold').addClass(numClass(totals.totalInvoice)).text(formatRupiah(totals.totalInvoice));
+      $('#total-payment').removeClass('text-danger fw-bold').addClass(numClass(totals.totalPayment)).text(formatRupiah(totals.totalPayment));
+      $('#total-balance').removeClass('text-danger fw-bold').addClass(numClass(totals.totalBalance)).text(formatRupiah(totals.totalBalance));
+    }
+
     function renderTable(dataset) {
       const $tbody = $('#report-body');
       $tbody.empty();
@@ -143,7 +170,7 @@
       if (!dataset || dataset.length === 0) {
         $tbody.append(`
           <tr>
-            <td colspan="4" class="text-center py-4 text-muted">Tidak ada data ditemukan.</td>
+            <td colspan="7" class="text-center py-4 text-muted">Tidak ada data ditemukan.</td>
           </tr>
         `);
       } else {
@@ -154,6 +181,9 @@
               <td class="ps-4 fw-semibold">${item.SupplierName || '-'}</td>
               <td><code class="text-secondary">${item.SupplierID || '-'}</code></td>
               <td class="text-end saldo-awal-cell text-muted">-</td>
+              <td class="text-end invoice-cell text-muted">-</td>
+              <td class="text-end payment-cell text-muted">-</td>
+              <td class="text-end balance-cell text-muted">-</td>
               <td class="text-center pe-4">
                 <button type="button" class="btn btn-sm btn-outline-secondary btn-toggle-detail" disabled>
                   <i class="bi bi-list-ul me-1"></i> Detail
@@ -161,7 +191,7 @@
               </td>
             </tr>
             <tr class="detail-row d-none" data-supplier-id="${encodedId}">
-              <td colspan="4" class="p-0">
+              <td colspan="7" class="p-0">
                 <div class="detail-container p-3 bg-white border-top"></div>
               </td>
             </tr>
@@ -189,7 +219,7 @@
 
       $('#report-body').html(`
         <tr>
-          <td colspan="4" class="text-center py-5">
+          <td colspan="7" class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
               <span class="visually-hidden">Loading...</span>
             </div>
@@ -210,7 +240,7 @@
           console.error('Error fetching data:', textStatus, errorThrown);
           $('#report-body').html(`
             <tr>
-              <td colspan="4" class="text-center py-4 text-danger">
+              <td colspan="7" class="text-center py-4 text-danger">
                 <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
                 Gagal mengambil data dari server (<code>${apiUrl}</code>).
               </td>
@@ -219,7 +249,7 @@
         });
     }
 
-    // Ambil detail transaksi (GRN/INV/PAYMENT) per supplier via AJAX, dibungkus Promise agar bisa di-await berurutan
+    // Ambil detail transaksi (GRN/INV) + summary per supplier via AJAX, dibungkus Promise agar bisa di-await berurutan
     function fetchSaldoAwalForSupplier(dbName, supplierId, startDate, endDate, lastPaymentDate) {
       const apiUrl = `http://localhost:3000/${dbName}/customer/detail` +
         `?supplierId=${encodeURIComponent(supplierId)}` +
@@ -230,31 +260,20 @@
       return $.get(apiUrl).then(function (response) {
         const res = typeof response === 'string' ? JSON.parse(response) : response;
         return {
-          detail: res.data || []
+          detail: res.data || [],
+          summary: res.summary || {}
         };
       });
     }
 
-    // Hitung balance berjalan (cash flow): baris ini = baris sebelumnya + (GRN + Invoice - Payment)
-    function computeRunningBalance(detail) {
-      let running = 0;
-      return (detail || []).map(function (r) {
-        const grnAmt = Number(r.GrnAmount || 0);
-        const invAmt = Number(r.totalInv || 0);
-        const payAmt = Number(r.totalPayment || 0);
-        running += (grnAmt + invAmt) - payAmt;
-        return Object.assign({}, r, { grnAmt, invAmt, payAmt, runningBalance: running });
-      });
-    }
-
-    function renderDetailTable(detail) {
+    // Render tabel detail transaksi. GrnAmount/totalInv/totalPayment/balance diambil langsung dari tiap baris JSON,
+    // dan baris Total diambil dari summary hasil API (tidak dihitung ulang di JS).
+    function renderDetailTable(detail, summary) {
       if (!detail || detail.length === 0) {
         return '<p class="text-muted small mb-0">Tidak ada detail transaksi.</p>';
       }
 
-      const rowsData = computeRunningBalance(detail);
-
-      const rows = rowsData.map(function (r) {
+      const rows = detail.map(function (r) {
         const isGrn = r.TypeID === 'GRN';
         const tranxId = isGrn ? (r.Id || '-') : '-';
         const invId = !isGrn ? (r.Id || '-') : '-';
@@ -266,20 +285,18 @@
             <td>${tranxId}</td>
             <td>${invId}</td>
             <td>${r.paymentId || '-'}</td>
-            <td class="text-end">${formatRupiahColored(r.grnAmt)}</td>
-            <td class="text-end">${formatRupiahColored(r.invAmt)}</td>
-            <td class="text-end">${formatRupiahColored(r.payAmt)}</td>
-            <td class="text-end">${formatRupiahColored(r.runningBalance)}</td>
+            <td class="text-end">${formatRupiahColored(r.GrnAmount)}</td>
+            <td class="text-end">${formatRupiahColored(r.totalInv)}</td>
+            <td class="text-end">${formatRupiahColored(r.totalPayment)}</td>
+            <td class="text-end">${formatRupiahColored(r.balance)}</td>
           </tr>
         `;
       }).join('');
 
-      const totalGrn = rowsData.reduce((sum, r) => sum + r.grnAmt, 0);
-      const totalInvoice = rowsData.reduce((sum, r) => sum + r.invAmt, 0);
-      const totalPayment = rowsData.reduce((sum, r) => sum + r.payAmt, 0);
-      const finalBalance = rowsData.length ? rowsData[rowsData.length - 1].runningBalance : 0;
+      const s = summary || {};
 
       return `
+        <div class="small text-muted mb-2">Saldo Awal: <span class="fw-semibold ${numClass(s.saldoAwal)}">${formatRupiah(s.saldoAwal)}</span></div>
         <table class="table table-sm table-bordered mb-0">
           <thead class="table-light">
             <tr>
@@ -298,10 +315,10 @@
           <tfoot class="table-light fw-semibold">
             <tr>
               <td colspan="5" class="text-end">Total</td>
-              <td class="text-end">${formatRupiahColored(totalGrn)}</td>
-              <td class="text-end">${formatRupiahColored(totalInvoice)}</td>
-              <td class="text-end">${formatRupiahColored(totalPayment)}</td>
-              <td class="text-end">${formatRupiahColored(finalBalance)}</td>
+              <td class="text-end">${formatRupiahColored(s.totalGrn)}</td>
+              <td class="text-end">${formatRupiahColored(s.totalInvoice)}</td>
+              <td class="text-end">${formatRupiahColored(s.totalPayment)}</td>
+              <td class="text-end">${formatRupiahColored(s.totalBalance)}</td>
             </tr>
           </tfoot>
         </table>
@@ -325,6 +342,7 @@
        $('#btn-export-excel').prop('disabled', true);
       const $btn = $('#btn-fetch-saldo-awal');
       $btn.prop('disabled', true);
+      $('#total-saldo-awal, #total-invoice, #total-payment, #total-balance').text('-');
 
       const total = globalCustomerData.length;
       for (let i = 0; i < total; i++) {
@@ -332,6 +350,9 @@
         const encodedId = encodeURIComponent(item.SupplierID || '');
         const $row = $(`tr[data-supplier-id="${encodedId}"]:not(.detail-row)`);
         const $cell = $row.find('.saldo-awal-cell');
+        const $invoiceCell = $row.find('.invoice-cell');
+        const $paymentCell = $row.find('.payment-cell');
+        const $balanceCell = $row.find('.balance-cell');
         const $detailBtn = $row.find('.btn-toggle-detail');
         const $detailContainer = $(`tr.detail-row[data-supplier-id="${encodedId}"] .detail-container`);
 
@@ -340,20 +361,32 @@
 
         try {
           // await di dalam loop membuat request berjalan satu-per-satu, tidak paralel
-          const { detail } = await fetchSaldoAwalForSupplier(dbName, item.SupplierID, startDate, endDate, lastPaymentDate);
-          console.log('Fetched detail for', item.SupplierID, { detail });
+          const { detail, summary } = await fetchSaldoAwalForSupplier(dbName, item.SupplierID, startDate, endDate, lastPaymentDate);
+          console.log('Fetched detail for', item.SupplierID, { detail, summary });
 
-          const rowsData = computeRunningBalance(detail);
-          const finalBalance = rowsData.length ? rowsData[rowsData.length - 1].runningBalance : 0;
-
-          item.saldoAwal = finalBalance;
+          // saldoAwal & total lain diambil langsung dari summary JSON, tidak dihitung ulang
+          item.saldoAwal = Number(summary.saldoAwal) || 0;
           item.saldoAwalDetail = detail;
+          item.summary = summary;
+
+          const totalInvoice = Number(summary.totalInvoice) || 0;
+          const totalPayment = Number(summary.totalPayment) || 0;
+          const totalBalance = Number(summary.totalBalance) || 0;
+
           $cell.removeClass('text-muted').removeClass('text-danger fw-semibold').addClass(numClass(item.saldoAwal)).text(formatRupiah(item.saldoAwal));
-          $detailContainer.html(renderDetailTable(detail));
+          $invoiceCell.removeClass('text-muted').addClass(numClass(totalInvoice)).text(formatRupiah(totalInvoice));
+          $paymentCell.removeClass('text-muted').addClass(numClass(totalPayment)).text(formatRupiah(totalPayment));
+          $balanceCell.removeClass('text-muted').addClass(numClass(totalBalance)).text(formatRupiah(totalBalance));
+
+          $detailContainer.html(renderDetailTable(detail, summary));
           $detailBtn.prop('disabled', false);
+          updateGrandTotals();
         } catch (err) {
           console.error('Gagal ambil detail untuk', item.SupplierID, err);
           $cell.removeClass('text-muted').addClass('text-danger').text('Error');
+          $invoiceCell.removeClass('text-muted').addClass('text-danger').text('Error');
+          $paymentCell.removeClass('text-muted').addClass('text-danger').text('Error');
+          $balanceCell.removeClass('text-muted').addClass('text-danger').text('Error');
         }
       }
 
@@ -377,17 +410,14 @@
       const aoa = [];
 
       suppliersWithDetail.forEach(function (item) {
-        const rowsData = computeRunningBalance(item.saldoAwalDetail || []);
-        const totalGrn = rowsData.reduce((sum, r) => sum + r.grnAmt, 0);
-        const totalInvoice = rowsData.reduce((sum, r) => sum + r.invAmt, 0);
-        const totalPayment = rowsData.reduce((sum, r) => sum + r.payAmt, 0);
-        const finalBalance = rowsData.length ? rowsData[rowsData.length - 1].runningBalance : 0;
+        const detail = item.saldoAwalDetail || [];
+        const s = item.summary || {};
 
         aoa.push([`Supplier: ${item.SupplierName || '-'} (${item.SupplierID || '-'})`]);
-        aoa.push([`Balance: ${item.saldoAwal || 0}`]);
+        aoa.push([`Saldo Awal: ${s.saldoAwal || 0}`]);
         aoa.push(['Tanggal', 'Type', 'Tranx ID', 'Inv ID', 'Payment ID', 'GRN', 'Invoice', 'Payment', 'Balance']);
 
-        rowsData.forEach(function (r) {
+        detail.forEach(function (r) {
           const isGrn = r.TypeID === 'GRN';
           aoa.push([
             r.date ? new Date(r.date).toLocaleDateString('id-ID') : '',
@@ -395,14 +425,14 @@
             isGrn ? (r.Id || '') : '',
             !isGrn ? (r.Id || '') : '',
             r.paymentId || '',
-            r.grnAmt,
-            r.invAmt,
-            r.payAmt,
-            r.runningBalance
+            Number(r.GrnAmount) || 0,
+            Number(r.totalInv) || 0,
+            Number(r.totalPayment) || 0,
+            Number(r.balance) || 0
           ]);
         });
 
-        aoa.push(['', '', '', '', 'Total', totalGrn, totalInvoice, totalPayment, finalBalance]);
+        aoa.push(['', '', '', '', 'Total', s.totalGrn || 0, s.totalInvoice || 0, s.totalPayment || 0, s.totalBalance || 0]);
         // Jeda beberapa baris kosong sebagai pemisah antar grup supplier
         aoa.push([]);
         aoa.push([]);

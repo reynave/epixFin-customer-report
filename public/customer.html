@@ -76,7 +76,7 @@
       <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <span class="text-muted small fw-medium">Total GRN (un-Invoice)</span>
+            <span class="text-muted small fw-medium">Total Saldo Awal</span>
             <h3 class="fw-bold text-primary mt-2 mb-0" id="stat-total-saldo-awal">Rp 0</h3>
           </div>
         </div>
@@ -100,7 +100,7 @@
       <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <span class="text-muted small fw-medium">Sisa Utang (Hutang)</span>
+            <span class="text-muted small fw-medium">Sisa Utang (Net Result)</span>
             <h3 class="fw-bold text-danger mt-2 mb-0" id="stat-total-result">Rp 0</h3>
           </div>
         </div>
@@ -122,12 +122,6 @@
           <div class="col text-md-end mt-2 mt-md-0">
             <span class="text-muted small" id="search-count">Menampilkan seluruh data</span>
           </div>
-          <!-- <div class="col d-grid">
-            <a href="customer-detail-all.html" id="detail-all-link" class="btn btn-outline-primary">
-                Detail All
-            </a> 
-          </div> -->
-          
         </div>
       </div>
 
@@ -139,10 +133,11 @@
               <tr>
                 <th scope="col" class="ps-4">Supplier</th>
                 <th scope="col">ID Supplier</th>
-                <th scope="col" class="text-end">GRN (un-Invoice)</th>
-                <th scope="col" class="text-end">Invoice</th>
-                <th scope="col" class="text-end">Payment</th>
-                <th scope="col" class="text-end">Hutang</th>
+                <th scope="col" class="text-end">Saldo Awal</th>
+                <th scope="col" class="text-end"> GRN</th>
+                <th scope="col" class="text-end"> Invoice</th>
+                <th scope="col" class="text-end"> Payment</th>
+                <th scope="col" class="text-end">Balance</th>
                 <th scope="col" class="text-center">Status</th>
                 <th scope="col" class="text-center pe-4">Aksi</th>
               </tr>
@@ -150,7 +145,17 @@
             <tbody id="report-body">
               <!-- Data JSON dimuat di sini -->
             </tbody>
-             
+            <tfoot class="table-group-divider fw-bold bg-light">
+              <tr>
+                <td colspan="2" class="ps-4">TOTAL (FILTERED)</td>
+                <td class="text-end" id="foot-saldo-awal">Rp 0</td>
+                <td class="text-end" id="foot-grn">Rp 0</td>
+                <td class="text-end" id="foot-invoice">Rp 0</td>
+                <td class="text-end" id="foot-paid">Rp 0</td>
+                <td class="text-end" id="foot-result">Rp 0</td>
+                <td colspan="2"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
        
@@ -178,13 +183,6 @@
       return Number(value) < 0 ? 'text-danger fw-semibold' : '';
     }
 
-    function setStatCard(id, value, positiveClass) {
-      const $el = $('#' + id);
-      $el.text(formatRupiah(value));
-      $el.removeClass('text-primary text-dark text-success text-danger');
-      $el.addClass(Number(value) < 0 ? 'text-danger' : positiveClass);
-    }
-
     let globalReportData = [];
 
     function goToDetail() {
@@ -202,19 +200,21 @@
       }
 
       const exportData = globalReportData.map(function(item) {
-        const grnAmount = Number(item.GrnAmount) || 0;
-        const invoiceTotal = Number(item.totalInv) || 0;
-        const paidTotal = Number(item.totalPayment) || 0;
-        const hutang = Number(item.Hutang) || 0;
+        const saldoAwal = Number(item.saldoAwal) || 0;
+        const totalGrn = Number(item.totalGRN ?? item.GrnAmount) || 0;
+        const totalInv = Number(item.totalInv) || 0;
+        const totalPayment = Number(item.totalPayment) || 0;
+        const balance = Number(item.balance) || 0;
 
         return {
           Supplier: item.SupplierName || '',
           'ID Supplier': item.SupplierID || '',
-          'GRN (un-Invoice)': grnAmount,
-          'Invoice Total': invoiceTotal,
-          'Paid Total': paidTotal,
-          'Hutang': hutang,
-          Status: hutang === 0 ? 'Lunas' : (hutang > 0 ? 'Sisa Utang' : 'Lebih Bayar')
+          'Saldo Awal': saldoAwal,
+          'Total GRN': totalGrn,
+          'Total Invoice': totalInv,
+          'Total Payment': totalPayment,
+          'Balance': balance,
+          Status: balance === 0 ? 'Lunas' : (balance > 0 ? 'Sisa Utang' : 'Lebih Bayar')
         };
       });
 
@@ -223,6 +223,7 @@
         { wch: 30 },
         { wch: 18 },
         { wch: 18 },
+        { wch: 16 },
         { wch: 18 },
         { wch: 18 },
         { wch: 18 },
@@ -241,41 +242,54 @@
       const $tbody = $('#report-body');
       $tbody.empty();
 
+      let grandSaldoAwal = 0;
       let grandGrn = 0;
       let grandInvoice = 0;
       let grandPaid = 0;
-      let grandHutang = 0;
+      let grandResult = 0;
 
       if (!dataset || dataset.length === 0) {
         $tbody.append(`
         <tr>
-          <td colspan="8" class="text-center py-4 text-muted">
+          <td colspan="9" class="text-center py-4 text-muted">
             <i class="bi bi-search me-1"></i> Data supplier tidak ditemukan
           </td>
         </tr>
       `);
       } else {
         $.each(dataset, function (index, item) {
-          const grnAmount = Number(item.GrnAmount || 0);
-          const invoiceTotal = Number(item.totalInv || 0);
-          const paidTotal = Number(item.totalPayment || 0);
-          const hutang = Number(item.Hutang || 0);
+          const saldoAwal = Number(item.saldoAwal || 0);
+          const totalGrn = Number(item.totalGRN ?? item.GrnAmount ?? 0);
+          const totalInv = Number(item.totalInv || 0);
+          const totalPayment = Number(item.totalPayment || 0);
+          const balance = Number(item.balance || 0);
+          const resultValue = balance;
 
-          grandGrn += grnAmount;
-          grandInvoice += invoiceTotal;
-          grandPaid += paidTotal;
-          grandHutang += hutang;
+          grandSaldoAwal += saldoAwal;
+          grandGrn += totalGrn;
+          grandInvoice += totalInv;
+          grandPaid += totalPayment;
+          grandResult += resultValue;
 
           let statusBadge = '';
           let resultClass = '';
+          let resultClassSaldoAwal = 'text-muted';
 
-          if (hutang === 0) {
+          if (resultValue === 0) {
             statusBadge = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Lunas</span>';
-          } else if (hutang > 0) {
+          } else if (resultValue > 0) {
             statusBadge = '<span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill">Sisa Utang</span>';
           } else {
             statusBadge = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill">Lebih Bayar</span>';
-            resultClass = 'text-danger fw-bold';
+            resultClass = 'text-danger fw-bold'; 
+          }
+
+          if(saldoAwal === 0) {
+            resultClassSaldoAwal = 'text-muted';
+          } else if (saldoAwal > 0) {
+            resultClassSaldoAwal = 'text-success fw-bold';
+          } else {
+            resultClassSaldoAwal = 'text-danger fw-bold';
           }
 
           const encodedId = encodeURIComponent(item.SupplierID || '');
@@ -289,13 +303,11 @@
             <tr>
               <td class="ps-4 fw-semibold">${item.SupplierName || '-'}</td>
               <td><code class="text-secondary">${item.SupplierID || '-'}</code></td>
-              <td class="text-end">
-                      ${formatRupiah(grnAmount)} 
-
-              </td>
-              <td class="text-end ${numClass(invoiceTotal)}">${formatRupiah(invoiceTotal)}</td>
-              <td class="text-end ${numClass(paidTotal)}">${formatRupiah(paidTotal)}</td>
-              <td class="text-end ${resultClass || numClass(hutang)}">${formatRupiah(hutang)}</td>
+              <td class="text-end ${resultClassSaldoAwal}">${formatRupiah(saldoAwal)} </td>
+              <td class="text-end ${numClass(totalGrn)}">${formatRupiah(totalGrn)}</td>
+              <td class="text-end">${formatRupiah(totalInv)}</td>
+              <td class="text-end">${formatRupiah(totalPayment)}</td>
+              <td class="text-end ${resultClass}">${formatRupiah(resultValue)}</td>
               <td class="text-center">${statusBadge}</td>
               <td class="text-center pe-4">
                 <a href="customer-detail.html?id=${encodedId}&startDate=${encodeURIComponent(startDate || '')}&endDate=${encodeURIComponent(endDate || '')}&lastPaymentDate=${encodeURIComponent(lastPaymentDate || '')}&dbName=${encodeURIComponent(dbName || '')}" class="btn btn-sm btn-outline-primary shadow-sm">
@@ -308,10 +320,11 @@
         });
       }
 
-      $('#foot-saldo-awal').text(formatRupiah(grandGrn));
+      $('#foot-saldo-awal').text(formatRupiah(grandSaldoAwal));
+      $('#foot-grn').text(formatRupiah(grandGrn));
       $('#foot-invoice').text(formatRupiah(grandInvoice));
       $('#foot-paid').text(formatRupiah(grandPaid));
-      $('#foot-result').text(formatRupiah(grandHutang));
+      $('#foot-result').text(formatRupiah(grandResult));
 
       $('#search-count').text(`Menampilkan ${dataset ? dataset.length : 0} dari ${globalReportData.length} supplier`);
     }
@@ -329,7 +342,7 @@
 
       $('#report-body').html(`
       <tr>
-        <td colspan="8" class="text-center py-5">
+        <td colspan="9" class="text-center py-5">
           <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Loading...</span>
           </div>
@@ -355,23 +368,10 @@
           $('#stat-total-supplier').text(res.total || globalReportData.length);
 
           const summary = res.summary || {};
-          let initialGrn = summary.totalGrnAmount !== undefined
-            ? summary.totalGrnAmount
-            : globalReportData.reduce((acc, curr) => acc + (curr.GrnAmount || 0), 0);
-          let initialInvoice = summary.totalInvoice !== undefined
-            ? summary.totalInvoice
-            : globalReportData.reduce((acc, curr) => acc + (curr.totalInv || 0), 0);
-          let initialPaid = summary.totalPayment !== undefined
-            ? summary.totalPayment
-            : globalReportData.reduce((acc, curr) => acc + (curr.totalPayment || 0), 0);
-          let initialHutang = summary.totalHutang !== undefined
-            ? summary.totalHutang
-            : globalReportData.reduce((acc, curr) => acc + (curr.Hutang || 0), 0);
-
-          setStatCard('stat-total-saldo-awal', initialGrn, 'text-primary');
-          setStatCard('stat-total-invoice', initialInvoice, 'text-dark');
-          setStatCard('stat-total-paid', initialPaid, 'text-success');
-          setStatCard('stat-total-result', initialHutang, 'text-danger');
+          $('#stat-total-saldo-awal').text(formatRupiah(summary.totalSaldoAwal));
+          $('#stat-total-invoice').text(formatRupiah(summary.totalInvoice));
+          $('#stat-total-paid').text(formatRupiah(summary.totalPayment));
+          $('#stat-total-result').text(formatRupiah(summary.totalBalance));
 
           renderTable(globalReportData);
         })
@@ -379,7 +379,7 @@
           console.error('Error fetching data:', textStatus, errorThrown);
           $('#report-body').html(`
           <tr>
-            <td colspan="8" class="text-center py-4 text-danger">
+            <td colspan="9" class="text-center py-4 text-danger">
               <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
               Gagal mengambil data dari server (<code>${apiUrl}</code>).
             </td>
@@ -390,23 +390,6 @@
 
     $(document).ready(function () {
       fetchReportData();
-
-      const urlParams = new URLSearchParams(window.location.search);
-      const detailAllParams = new URLSearchParams({
-        startDate: urlParams.get('startDate') || '',
-        endDate: urlParams.get('endDate') || '',
-        lastPaymentDate: urlParams.get('lastPaymentDate') || '',
-        dbName: urlParams.get('dbName') || ''
-      });
-      $('#detail-all-link').attr('href', `customer-detail-all.html?${detailAllParams.toString()}`);
-
-      const uninvoicedGrnParams = new URLSearchParams({
-        startDate: urlParams.get('startDate') || '',
-        lastDate: urlParams.get('endDate') || '',
-        lastPaymentDate: urlParams.get('lastPaymentDate') || '',
-        dbName: urlParams.get('dbName') || ''
-      });
-      $('#uninvoiced-grn-link').attr('href', `univoiced-grn.html?${uninvoicedGrnParams.toString()}`);
 
       $('#search-input').on('keyup input', function () {
         const keyword = $(this).val().toLowerCase().trim();

@@ -147,119 +147,10 @@ exports.getCustomer = async (req, res) => {
     });
   }
 };
+
  
-// ver 2
-exports.getReportPage_Ver2 = async (req, res) => {
-  const dbName = validateDbNameOrRespond(req, res);
-  if (!dbName) return;
-
-  try {
-    const { startDate, endDate, lastPaymentDate } = req.query;
-
-    const start = startDate;
-    const end = endDate;
-    const lastPay = lastPaymentDate || end;
-
-
-    if (!start || !end) {
-      return res.status(400).json({
-        status: 'error',
-        requestedDb: dbName,
-        error: 'Parameter startDate dan endDate diperlukan. Format: YYYY-MM-DD',
-      });
-    } 
-
-    const pool = await getPool(dbName);
-    const q = `
-        Declare @startDate DateTime
-        Declare @endDate DateTime
-        Declare @lastPaymentDate DateTime
-        
-        Set @startDate = '${start}'
-        Set @endDate = '${end}'
-        set @lastPaymentDate = '${lastPay}'
-
-        select 
-          a.SupplierID,  
-          sum(ISNULL(a.InvAmt,a.TotalAmount)) as 'balance'  
-        from (
-          select g.TranxID, g.ReceivedDate, g.TotalAmount, id.InvID, id.InvAmt, g.SupplierID
-          from FinMsGRN as g
-          left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
-          where  g.ReceivedDate between @startDate and @endDate 
-        ) a
-        left join (
-          select pd.InvID, SUM(pd.PayAmt + pd.AmtAdj) as 'TotalPaid'
-          from FinApPaymentDetail as pd
-          join FinApPayment as p on p.PaymentID = pd.PaymentID
-          where p.PaymentDate between '${start}' and @lastPaymentDate 
-          and p.Status = 'CLOSED'
-          group by pd.InvID
-        ) b on b.InvID = a.InvID
-        where  ( ((a.InvAmt - ISNULL(b.TotalPaid, 0)) > 0 or ISNULL(b.TotalPaid, 0) <= 0 ) or 
-          ISNULL(a.InvAmt,a.TotalAmount) < 0 )  
-        group by a.SupplierID
-        order by a.SupplierID ASC
-      `;
-    const result = await pool
-      .request()
-      .query(q);
-
-
-    const q0 = QuerySaldoAwal(start);
-    const q_saldoAwal = await pool
-      .request()
-      .query(q0);
  
-    for (const row of result.recordset) {
-      const saldoAwalRow = q_saldoAwal.recordset.find(r => r.SupplierID === row.SupplierID);
-      row.saldoAwal = saldoAwalRow ? saldoAwalRow.saldoAwal : 0; 
-    }
-
-
-
-     const s = `
-        SELECT SupplierName, SupplierID
-        FROM finMsSupplier 
-        ORDER BY SupplierName ASC;
-      `;
-    const supplierResult = await pool
-      .request()
-      .query(s);
-
-    for (const supplier of supplierResult.recordset) {
-      const row = result.recordset.find(r => r.SupplierID === supplier.SupplierID);
-      if (row) {
-        row.SupplierName = supplier.SupplierName;
-      }
-    }
-
-
-
-    let totalSaldoAwal = result.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
-    return res.json({
-      requestedDb: dbName,
-      filter: { startDate: start, endDate: end, lastPaymentDate: lastPay },
-      total: result.recordset.length,
-      summary: {
-        totalSaldoAwal: totalSaldoAwal,
-        totalInvoice: result.recordset.reduce((sum, row) => sum + (row.invoice || 0), 0),
-        totalPayment: result.recordset.reduce((sum, row) => sum + (row.paidTotal || 0), 0),
-        totalBalance: result.recordset.reduce((sum, row) => sum + (row.balance || 0), 0),
-      },
-      data: result.recordset, 
-
-    });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({
-      status: 'error',
-      requestedDb: dbName,
-      error: 'Gagal ambil data: ' + err.message,
-    });
-  }
-};
-
+ // ver 4 
 exports.getReportPage = async (req, res) => {
   const dbName = validateDbNameOrRespond(req, res);
   if (!dbName) return;
@@ -290,88 +181,112 @@ exports.getReportPage = async (req, res) => {
         Set @endDate = '${end}'
         set @lastPaymentDate = '${lastPay}'
 
+        
        
- select s.SupplierName, x1.SupplierID, sum(x1.GrnAmount) as 'GrnAmount' , sum(x1.totalInv) as 'totalInv', 
- sum(x1.totalPayment) as 'totalPayment',
-
-  sum(x1.GrnAmount + x1.totalInv - x1.totalPayment) as 'Hutang'
-
- 
+ select x1.SupplierID, sum(x1.GrnAmount) as 'GrnAmount', sum(x1.totalInv) as 'totalInv', sum(x1.totalPayment) as 'totalPayment', 
+ sum(x1.balance) as 'balance'
  from (
 	-- DATA GRN
- 	select g.SupplierID,   
-		g.TotalAmount 'GrnAmount',  0 as 'totalInv',  0 'totalPayment' 
+ 	select  g.SupplierID ,
+		g.TotalAmount 'GrnAmount',  0 as 'totalInv',  0 'totalPayment' , g.TotalAmount 'balance'
 	from FinMsGRN as g
 	left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
 	where  (g.ReceivedDate between  @startDate and @endDate)
 		and id.InvID is null 
- 
-	union all
+	UNION ALL
 
-	select a1.* from (
-		-- DATA INV
-		select 
-			t1.SupplierID,  
-			0 as 'GrnAmount',   t1.totalInvoice 'totalInv',   0 as 'totalPayment'
+	-- DATA INV
+	select 
+			 t1.SupplierID ,
+			
+ 0 as 'GrnAmount',
+			i.InvTotal, (select sum(pd.PayAmt+ pd.AmtAdj) 
+			from FinApPaymentDetail as pd
+			join FinApPayment as p on p.PaymentID = pd.PaymentID
+			where  pd.InvID = t1.InvID and p.PaymentDate  between  @startDate and @lastPaymentDate
+			
+			) 'totalPayment',
+			(i.InvTotal -  
+				(select sum(pd.PayAmt+ pd.AmtAdj) 
+				from FinApPaymentDetail as pd
+				join FinApPayment as p on p.PaymentID = pd.PaymentID
+				where  pd.InvID = t1.InvID and p.PaymentDate  between  @startDate and @lastPaymentDate )
+			
+			) as 'balance'  
 		from (
-				select g.SupplierID,  id.InvID, sum(id.InvAmt) as 'totalInvoice'
+				select  g.SupplierID, id.InvID 
 				from FinMsGRN as g
 				left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
-				where  g.ReceivedDate between  @startDate and @endDate 
-				group by id.InvID ,  g.SupplierID
+				where  g.ReceivedDate between  @startDate and @endDate
+					
+				group by id.InvID , g.SupplierID
 		) as t1
 		join FinApInvoice as i on i.InvID = t1.InvID 
-		where  i.InvDate between @startDate and @endDate
-			
-		union all 
+	 		where (select InvDate from FinApInvoice where InvID = t1.InvID  ) between @startDate and @endDate
 
-		-- DATA PAYMENT
-		select 
-			t1.SupplierID, 
-			 
-			0 as 'GrnAmount',  0 'totalInv',  (pd.PayAmt+pd.AmtAdj) as 'totalPayment'
-
-		from (
-				select  g.SupplierID, id.InvID, sum(id.InvAmt) as 'totalInvoice'
-				from FinMsGRN as g
-				left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
-				where  g.ReceivedDate between  @startDate and @endDate 
-				group by id.InvID ,  g.SupplierID
-			) as t1
-		left join FinApInvoice as i on i.InvID = t1.InvID
-		left join FinApPaymentDetail as pd on pd.InvID = t1.InvID
-		left join FinApPayment as p on  pd.PaymentID = p.PaymentID
-
-		where p.Status = 'CLOSED'   and p.PaymentDate between @startDate and  @lastPaymentDate
-	) a1 
+		 
 
 ) as x1 
-join FinMsSupplier as s  on s.SupplierID = x1.SupplierID
-group by x1.SupplierID, s.SupplierName
-order by x1.SupplierID ASC
-
+group by x1.SupplierID
  
+      
       `;
     const result = await pool
       .request()
       .query(q);
 
-   const totalGrnAmount = result.recordset.reduce((sum, row) => sum + (row.grnAmount || 0), 0);
-   const totalInvoice = result.recordset.reduce((sum, row) => sum + (row.totalInv || 0), 0);
-   const totalPayment = result.recordset.reduce((sum, row) => sum + (row.totalPayment || 0), 0);
-   const totalHutang = result.recordset.reduce((sum, row) => sum + (row.Hutang || 0), 0);
+
+    const q0 = QuerySaldoAwal(start);
+    const q_saldoAwal = await pool
+      .request()
+      .query(q0);
  
+    for (const row of result.recordset) {
+      const saldoAwalRow = q_saldoAwal.recordset.find(r => r.SupplierID === row.SupplierID);
+      row.saldoAwal = saldoAwalRow ? saldoAwalRow.saldoAwal : 0;  
+    }
+ 
+
+    
+
+
+
+     const s = `
+        SELECT SupplierName, SupplierID
+        FROM finMsSupplier 
+        ORDER BY SupplierName ASC;
+      `;
+    const supplierResult = await pool
+      .request()
+      .query(s);
+
+    for (const supplier of supplierResult.recordset) {
+      const row = result.recordset.find(r => r.SupplierID === supplier.SupplierID);
+      if (row) {
+        row.SupplierName = supplier.SupplierName; 
+      }
+    }
+
+    for (const row of result.recordset) {
+      row.totalInv = row.totalInv || 0;
+      row.totalPayment = row.totalPayment || 0;
+      row.balance = row.GrnAmount + row.totalInv - row.totalPayment;
+    }
+
+
+    let totalSaldoAwal = result.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
     return res.json({
       requestedDb: dbName,
       filter: { startDate: start, endDate: end, lastPaymentDate: lastPay },
       total: result.recordset.length,
-      summary: { 
-        totalGrnAmount: totalGrnAmount,
-        totalInvoice: totalInvoice,
-        totalPayment: totalPayment,
-        totalHutang: totalHutang,
+      summary: {
+        totalSaldoAwal: totalSaldoAwal,
+        totalInvoice: result.recordset.reduce((sum, row) => sum + (row.totalInv || 0), 0),
+        totalPayment: result.recordset.reduce((sum, row) => sum + (row.totalPayment || 0), 0),
+        totalBalance: result.recordset.reduce((sum, row) => sum + (row.balance || 0), 0),
       },
       data: result.recordset, 
+      q : q,
 
     });
   } catch (err) {
@@ -383,112 +298,7 @@ order by x1.SupplierID ASC
     });
   }
 };
- 
- 
-// ver 2
-exports.getReportDetail_ver2 = async (req, res) => {
-  const dbName = validateDbNameOrRespond(req, res);
-  if (!dbName) return;
 
-  try {
-    const { supplierId, startDate, endDate, lastPaymentDate } = req.query;
-    if (!supplierId || !startDate || !endDate) {
-      return res.status(400).json({
-        status: 'error',
-        requestedDb: dbName,
-        error: 'Parameter supplierId, startDate, dan endDate diperlukan untuk detail laporan.',
-      });
-    }
-
-    const start = startDate;
-    const end = endDate;
-    const lastPay = lastPaymentDate || end;
-
-    const pool = await getPool(dbName);
-    const q = `
-        Declare @supplierId varchar(50)
-        Declare @startDate DateTime
-        Declare @endDate DateTime
-        Declare @lastPaymentDate DateTime
-
-        Set @supplierId = '${supplierId}'
-        Set @startDate = '${start}'
-        Set @endDate = '${end}'
-        set @lastPaymentDate = '${lastPay}'
-         
-        select 
-          a.TranxID, 
-          a.ReceivedDate, 
-          a.TotalAmount,
-          a.InvID, 
-          ISNULL(a.InvAmt,a.TotalAmount) as 'Invoice', 
-        
-		   CASE 
-			WHEN a.InvAmt < 0 THEN 0 
-			ELSE   b.TotalPaid END
-		as 'Payment',
-
-		  CASE 
-			WHEN a.InvAmt < 0 THEN 0 
-			ELSE  a.InvAmt - ISNULL(b.TotalPaid, 0) END
-		as 'Outstanding'
-        from (
-          select g.TranxID, g.ReceivedDate, g.TotalAmount, id.InvID, id.InvAmt
-          from FinMsGRN as g
-          left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
-          where g.SupplierID = '${supplierId}'
-          and g.ReceivedDate between '${start}' and '${end}' 
-        ) a
-        left join (
-          select pd.InvID, SUM(pd.PayAmt + pd.AmtAdj) as 'TotalPaid'
-          from FinApPaymentDetail as pd
-          join FinApPayment as p on p.PaymentID = pd.PaymentID
-          where pd.SupplierID = '${supplierId}' 
-          and p.PaymentDate between '${start}' and '${lastPay}' 
-          and p.Status = 'CLOSED'
-          group by pd.InvID
-        ) b on b.InvID = a.InvID
-        where 
-         ((a.InvAmt - ISNULL(b.TotalPaid, 0)) > 0 or ISNULL(b.TotalPaid, 0) <= 0 ) 
-         or   ISNULL(a.InvAmt,a.TotalAmount) < 0 
-        order by a.ReceivedDate ASC, a.TranxID ASC
-      `;
-    const result = await pool.query(q);
-  
-    let balance = 0; // dari query terpisah
-
-    const recordset = result.recordset.map(row => {
-      balance += row.Invoice || 0;
-      return {
-        ...row,
-        balance: balance 
-      };
-    });
-
-    return res.json({
-      status: 'ok',
-      requestedDb: dbName,
-      filter: { supplierId, startDate: start, endDate: end, lastPaymentDate: lastPay },
-
-      total: recordset.length,
-      summary: {
-        totalSaldoAwal:0,
-        totalInvoice: recordset.reduce((sum, row) => sum + (row.Invoice || 0), 0),
-        totalPayment: recordset.reduce((sum, row) => sum + (row.Payment || 0), 0),
-        totalBalance: 0,
-      },
-      data: recordset,
-      query: q,
-    });
-  }
-  catch (err) {
-    return res.status(500).json({
-      status: 'error',
-      requestedDb: dbName,
-      error: 'Gagal ambil detail laporan: ' + err.message,
-    });
-  }
-}
  
 // ver 3
 exports.getReportDetail = async (req, res) => {
@@ -521,25 +331,39 @@ exports.getReportDetail = async (req, res) => {
         Set @endDate = '${end}'
         set @lastPaymentDate = '${lastPay}'
          
+         
        
  select x1.* from (
 	-- DATA GRN
  	select 'GRN' as 'TypeID', g.TranxID as 'Id', '' as 'paymentId', g.ReceivedDate as 'date',  
-		g.TotalAmount 'GrnAmount',  0 as 'totalInv',  0 'totalPayment' 
+		g.TotalAmount 'GrnAmount',  0 as 'totalInv',  0 'totalPayment' , g.TotalAmount 'balance'
 	from FinMsGRN as g
 	left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
 	where  (g.ReceivedDate between  @startDate and @endDate)
 		and id.InvID is null and  g.SupplierID = @supplierId
- 
-	union all
+	UNION ALL
 
-	select a1.* from (
-		-- DATA INV
-		select 
-			'INV' as 'TypeID', t1.InvID as 'Id' , '' as 'PaymentID', i.InvDate as 'date', 
-			0 as 'GrnAmount',   t1.totalInvoice 'totalInv',   0 as 'totalPayment'
+	-- DATA INV
+	select 
+			'INV' as 'TypeID', t1.InvID as 'Id'  , 
+			 STUFF((
+				select ', ' + pd.PaymentID
+				from FinApPaymentDetail pd
+				where pd.InvID = t1.InvID
+				for xml path('')
+			), 1, 2, '') as 'paymentId',
+
+			(select InvDate from FinApInvoice where InvID = t1.InvID  ) as 'date', 0 as 'GrnAmount',
+			i.InvTotal, (select sum(pd.PayAmt+ pd.AmtAdj) 
+				from FinApPaymentDetail as pd
+				join FinApPayment as p on p.PaymentID = pd.PaymentID
+				where  pd.InvID = t1.InvID and p.PaymentDate  between  @startDate and @lastPaymentDate) 'totalPayment',
+			(i.InvTotal - (select sum(pd.PayAmt+ pd.AmtAdj) 
+				from FinApPaymentDetail as pd
+				join FinApPayment as p on p.PaymentID = pd.PaymentID
+				where  pd.InvID = t1.InvID and p.PaymentDate  between  @startDate and @lastPaymentDate)) as 'balance'  
 		from (
-				select   id.InvID, sum(id.InvAmt) as 'totalInvoice'
+				select   id.InvID 
 				from FinMsGRN as g
 				left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
 				where  g.ReceivedDate between  @startDate and @endDate
@@ -547,49 +371,69 @@ exports.getReportDetail = async (req, res) => {
 				group by id.InvID 
 		) as t1
 		join FinApInvoice as i on i.InvID = t1.InvID 
-		where  i.InvDate between @startDate and @endDate
-			
-		union all 
-
-		-- DATA PAYMENT
-		select 
-			'PAYMENT' as 'TypeID', t1.InvID as 'Id' ,  pd.PaymentID, i.InvDate as 'date', 
-			0 as 'GrnAmount',  0 'totalInv',  (pd.PayAmt+pd.AmtAdj) as 'totalPayment'
-
-		from (
-				select   id.InvID, sum(id.InvAmt) as 'totalInvoice'
-				from FinMsGRN as g
-				left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
-				where  g.ReceivedDate between  @startDate and @endDate
-					and g.SupplierID = @supplierId
-				group by id.InvID 
-			) as t1
-		left join FinApInvoice as i on i.InvID = t1.InvID
-		left join FinApPaymentDetail as pd on pd.InvID = t1.InvID
-		left join FinApPayment as p on  pd.PaymentID = p.PaymentID
-
-		where p.Status = 'CLOSED'   and p.PaymentDate between @startDate and  @lastPaymentDate
-	) a1 
-
+	 		where (select InvDate from FinApInvoice where InvID = t1.InvID  ) between @startDate and @endDate
+ 
 ) as x1 
  order by x1.TypeID asc , x1.Id ASC, x1.date ASC
+      
       `;
     const result = await pool.query(q);
-  
-    let balance = 0; // dari query terpisah
 
-    const recordset = result.recordset.map(row => {
-      balance += row.Invoice || 0;
-      return {
-        ...row,
-        balance: balance 
-      };
-    });
+ 
+
+    const recordset = result.recordset; // balance sudah dihitung di query SQL, tidak dihitung ulang di sini
+
+    for (const row of recordset) {
+      if(row.totalInv == null)
+        row.totalInv = 0;
+      if(row.totalPayment == null)
+        row.totalPayment = 0;
+      if(row.balance == null)
+        row.balance = 0;
+
+      row.balance = row.GrnAmount + row.totalInv - row.totalPayment;
+    } 
+
 
     const totalGrn = recordset.reduce((sum, row) => sum + (row.GrnAmount || 0), 0);
     const totalInvoice = recordset.reduce((sum, row) => sum + (row.totalInv || 0), 0);
     const totalPayment = recordset.reduce((sum, row) => sum + (row.totalPayment || 0), 0);
-    const totalBalance = totalGrn + totalInvoice - totalPayment;
+ 
+
+
+
+     const q0 = `
+      Declare @startDate DateTime 
+        
+      Set @startDate = '${start}'  
+
+      select t1.SupplierID, sum(t1.Invoice - t1.Paid) 'saldoAwal' from (
+
+        -- TAGIHAN berdasrkan GRN
+        select g.SupplierID , g.ReceivedDate 'Date',  g.TranxID,  g.TotalAmount 'Invoice',
+         0 as 'Paid' , 'GRN' as 'ID'
+        from FinMsGRN g
+        where g.ReceivedDate < @startDate     and g.SupplierID = '${supplierId}'
+
+         UNION ALL 
+       -- GRN SUDAH DIBAYAR (1 baris per TranxID, tidak dobel walau invoice/payment detail-nya banyak)
+        select g.SupplierID,
+          MAX(p.PaymentDate) as 'Date',
+          g.TranxID, 0 as 'Invoice', g.TotalAmount as 'Paid', 
+          MIN(CAST(appd.PaymentID as varchar(20))) as 'ID'
+        from FinMsGRN as g
+        join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
+        join FinApPaymentDetail as appd on apid.InvID = appd.InvID
+        left join FinApPayment as p on p.PaymentID = appd.PaymentID
+        where p.PaymentDate < @startDate          and g.SupplierID = '${supplierId}'
+        group by g.SupplierID, g.TranxID, g.TotalAmount
+
+      ) t1
+      group by t1.SupplierID 
+    `;
+    const result0 = await pool.query(q0);
+    const saldoAwal = result0.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
+
 
     return res.json({
       status: 'ok',
@@ -598,10 +442,11 @@ exports.getReportDetail = async (req, res) => {
 
       total: recordset.length,
       summary: {
+        saldoAwal: saldoAwal,
         totalGrn: totalGrn,
         totalInvoice: totalInvoice,
         totalPayment: totalPayment,
-        totalBalance: totalBalance,
+        totalBalance: totalGrn + totalInvoice - totalPayment,
       },
       data: recordset,
       query: q,

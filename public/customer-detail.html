@@ -50,8 +50,8 @@
       <div class="col">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <span class="text-muted small fw-medium">Total Record</span>
-            <h3 class="fw-bold text-primary mt-2 mb-0" id="stat-total-record">0</h3>
+            <span class="text-muted small fw-medium">Saldo Awal</span>
+            <h3 class="fw-bold text-primary mt-2 mb-0" id="stat-saldo-awal">Rp 0</h3>
           </div>
         </div>
       </div>
@@ -59,7 +59,7 @@
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
             <span class="text-muted small fw-medium">Total GRN (Blm Invoice)</span>
-            <h3 class="fw-bold text-dark mt-2 mb-0" id="stat-total-saldo-awal">Rp 0</h3>
+            <h3 class="fw-bold text-dark mt-2 mb-0" id="stat-total-grn">Rp 0</h3>
           </div>
         </div>
       </div>
@@ -235,15 +235,12 @@
         return;
       }
 
-      let runningBalance = 0;
       const exportData = globalDetailData.map(function(item) {
-        const isPayment = item.TypeID === 'PAYMENT';
         const isGrn = item.TypeID === 'GRN';
         const grnAmt = Number(item.GrnAmount) || 0;
         const invAmt = Number(item.totalInv) || 0;
         const payAmt = Number(item.totalPayment) || 0;
-
-        runningBalance += (grnAmt + invAmt) - payAmt;
+        const balAmt = Number(item.balance) || 0;
 
         return {
           'Tanggal': item.date ? new Date(item.date) : '',
@@ -254,7 +251,7 @@
           'GRN (Rp)': grnAmt,
           'Invoice (Rp)': invAmt,
           'Payment (Rp)': payAmt,
-          'Balance (Rp)': runningBalance
+          'Balance (Rp)': balAmt
         };
       });
 
@@ -287,7 +284,7 @@
       let calcGrn = 0;
       let calcInvoice = 0;
       let calcPayment = 0;
-      let runningBalance = 0;
+      let calcBalance = 0;
 
       if (!dataset || dataset.length === 0) {
         $tbody.append(`
@@ -302,14 +299,11 @@
           const grnAmt = Number(item.GrnAmount || 0);
           const invAmt = Number(item.totalInv || 0);
           const payAmt = Number(item.totalPayment || 0);
-
+          const balAmt = Number(item.balance || 0);
           calcGrn += grnAmt;
           calcInvoice += invAmt;
           calcPayment += payAmt;
-
-          // Balance berjalan (running/cumulative): saldo baris ini = saldo baris sebelumnya + (GRN + Invoice - Payment)
-          runningBalance += (grnAmt + invAmt) - payAmt;
-          const balAmt = runningBalance;
+          calcBalance += balAmt;
 
           const isPayment = item.TypeID === 'PAYMENT';
           const isGrn = item.TypeID === 'GRN';
@@ -346,7 +340,7 @@
       $('#foot-grn').text(formatRupiah(calcGrn));
       $('#foot-invoice').text(formatRupiah(calcInvoice));
       $('#foot-payment').text(formatRupiah(calcPayment));
-      $('#foot-balance').text(formatRupiah(runningBalance));
+      $('#foot-balance').text(formatRupiah(calcBalance));
 
       $('#search-count').text(`Menampilkan ${dataset ? dataset.length : 0} dari ${globalDetailData.length} transaksi`);
     }
@@ -388,7 +382,9 @@
 
           $('#stat-total-record').text(res.total || 0);
           if (res.summary) {
-            $('#stat-total-saldo-awal').text(formatRupiah(res.summary.totalGrn));
+            $('#stat-saldo-awal').text(formatRupiah(res.summary.saldoAwal));
+           $('#stat-total-grn').text(formatRupiah(res.summary.totalGrn));
+            
             $('#stat-total-invoice').text(formatRupiah(res.summary.totalInvoice));
             $('#stat-total-payment').text(formatRupiah(res.summary.totalPayment));
             $('#stat-total-balance').text(formatRupiah(res.summary.totalBalance));

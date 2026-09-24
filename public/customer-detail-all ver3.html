@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daftar Customer / Supplier</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="bg-light">
+
+  <div class="container my-2">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm mb-2 shadow-sm">
+          <i class="bi bi-arrow-left me-1"></i> Kembali
+        </a>
+        <h2 class="fw-bold text-dark mb-0">Daftar Customer / Supplier</h2>
+        <p class="text-muted mb-0">
+          Database: <span id="db-name" class="fw-bold text-dark">-</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Filter Periode Invoice -->
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label for="filter-start-date" class="form-label small text-muted mb-1">Start Date</label>
+            <input type="date" id="filter-start-date" class="form-control form-control-sm">
+          </div>
+          <div class="col-auto">
+            <label for="filter-end-date" class="form-label small text-muted mb-1">End Date</label>
+            <input type="date" id="filter-end-date" class="form-control form-control-sm">
+          </div>
+          <div class="col-auto">
+            <label for="filter-last-payment-date" class="form-label small text-muted mb-1">Last Payment Date</label>
+            <input type="date" id="filter-last-payment-date" class="form-control form-control-sm">
+          </div>
+          <div class="col-auto">
+            <button type="button" id="btn-fetch-saldo-awal" class="btn btn-primary btn-sm">
+              <i class="bi bi-play-fill me-1"></i> Tarik Data
+            </button>
+          </div>
+          <div class="col-auto">
+            <button type="button" id="btn-export-excel" class="btn btn-success btn-sm" disabled>
+              <i class="bi bi-file-earmark-excel me-1"></i> Export to Excel
+            </button>
+          </div>
+          <div class="col-auto">
+            <span class="text-muted small" id="waterfall-progress">
+              <small>Setelah <b>Tarik Data</b> Selesai baru bisa download excel</small>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="card border-0 shadow-sm mt-3">
+      <!-- Search Bar Toolbar -->
+      <div class="card-header bg-white py-3 border-0">
+        <div class="row align-items-center">
+          <div class="col">
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+              <input type="text" id="search-input" class="form-control bg-light border-start-0"
+                placeholder="Cari Nama atau ID Supplier..." disabled>
+            </div>
+          </div>
+          <div class="col text-md-end mt-2 mt-md-0">
+            <span class="text-muted small" id="search-count">Menampilkan seluruh data</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" id="report-table">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th scope="col" class="ps-4">Supplier</th>
+                <th scope="col">ID Supplier</th>
+                <th scope="col" class="text-end">Invoice</th>
+                <th scope="col" class="text-center pe-4">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="report-body">
+              <!-- Data JSON dimuat di sini -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="my-3 text-muted text-center small">
+    <small>Ver 1.260827.0</small>
+  </div>
+
+  <!-- jQuery & Bootstrap JS -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+  <script>
+    function formatRupiah(number) {
+      if (number === null || number === undefined) return 0;
+      return new Intl.NumberFormat('id-ID', {
+        maximumFractionDigits: 0
+      }).format(number);
+    }
+
+    function numClass(value) {
+      return Number(value) < 0 ? 'text-danger fw-semibold' : '';
+    }
+
+    function formatRupiahColored(number) {
+      return `<span class="${numClass(number)}">${formatRupiah(number)}</span>`;
+    }
+
+    function typeBadge(typeId) {
+      if (typeId === 'GRN') return '<span class="badge bg-info-subtle text-info border border-info-subtle">GRN</span>';
+      if (typeId === 'INV') return '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">INV</span>';
+      if (typeId === 'PAYMENT') return '<span class="badge bg-success-subtle text-success border border-success-subtle">PAYMENT</span>';
+      return `<span class="badge bg-light text-dark border">${typeId || '-'}</span>`;
+    }
+
+    let globalCustomerData = [];
+
+    function renderTable(dataset) {
+      const $tbody = $('#report-body');
+      $tbody.empty();
+
+      if (!dataset || dataset.length === 0) {
+        $tbody.append(`
+          <tr>
+            <td colspan="4" class="text-center py-4 text-muted">Tidak ada data ditemukan.</td>
+          </tr>
+        `);
+      } else {
+        dataset.forEach(function (item) {
+          const encodedId = encodeURIComponent(item.SupplierID || '');
+          const row = `
+            <tr data-supplier-id="${encodedId}">
+              <td class="ps-4 fw-semibold">${item.SupplierName || '-'}</td>
+              <td><code class="text-secondary">${item.SupplierID || '-'}</code></td>
+              <td class="text-end saldo-awal-cell text-muted">-</td>
+              <td class="text-center pe-4">
+                <button type="button" class="btn btn-sm btn-outline-secondary btn-toggle-detail" disabled>
+                  <i class="bi bi-list-ul me-1"></i> Detail
+                </button>
+              </td>
+            </tr>
+            <tr class="detail-row d-none" data-supplier-id="${encodedId}">
+              <td colspan="4" class="p-0">
+                <div class="detail-container p-3 bg-white border-top"></div>
+              </td>
+            </tr>
+          `;
+          $tbody.append(row);
+        });
+      }
+
+      $('#search-count').text(`Menampilkan ${dataset ? dataset.length : 0} dari ${globalCustomerData.length} supplier`);
+    }
+
+    function fetchCustomerData() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dbName = urlParams.get('dbName') || 'EpixFIN_RMM';
+      const startDate = urlParams.get('startDate') || $('#filter-start-date').val();
+      const endDate = urlParams.get('endDate') || $('#filter-end-date').val();
+      const lastPaymentDate = urlParams.get('lastPaymentDate') || $('#filter-last-payment-date').val() || endDate;
+
+      $('#db-name').text(dbName);
+
+      const apiUrl = `http://localhost:3000/${dbName}/customer/` +
+        `?startDate=${encodeURIComponent(startDate)}` +
+        `&endDate=${encodeURIComponent(endDate)}` +
+        `&lastPaymentDate=${encodeURIComponent(lastPaymentDate)}`;
+
+      $('#report-body').html(`
+        <tr>
+          <td colspan="4" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="text-muted mt-2 mb-0">Mengambil data dari server...</p>
+          </td>
+        </tr>
+      `);
+
+      $.get(apiUrl)
+        .done(function (response) {
+          const res = typeof response === 'string' ? JSON.parse(response) : response;
+
+          $('#db-name').text(res.requestedDb || dbName);
+          globalCustomerData = res.data || [];
+          renderTable(globalCustomerData);
+        })
+        .fail(function (jqXHR, textStatus, errorThrown) {
+          console.error('Error fetching data:', textStatus, errorThrown);
+          $('#report-body').html(`
+            <tr>
+              <td colspan="4" class="text-center py-4 text-danger">
+                <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
+                Gagal mengambil data dari server (<code>${apiUrl}</code>).
+              </td>
+            </tr>
+          `);
+        });
+    }
+
+    // Ambil detail transaksi (GRN/INV/PAYMENT) per supplier via AJAX, dibungkus Promise agar bisa di-await berurutan
+    function fetchSaldoAwalForSupplier(dbName, supplierId, startDate, endDate, lastPaymentDate) {
+      const apiUrl = `http://localhost:3000/${dbName}/customer/detail` +
+        `?supplierId=${encodeURIComponent(supplierId)}` +
+        `&startDate=${encodeURIComponent(startDate)}` +
+        `&endDate=${encodeURIComponent(endDate)}` +
+        `&lastPaymentDate=${encodeURIComponent(lastPaymentDate)}`;
+
+      return $.get(apiUrl).then(function (response) {
+        const res = typeof response === 'string' ? JSON.parse(response) : response;
+        return {
+          detail: res.data || []
+        };
+      });
+    }
+
+    // Hitung balance berjalan (cash flow): baris ini = baris sebelumnya + (GRN + Invoice - Payment)
+    function computeRunningBalance(detail) {
+      let running = 0;
+      return (detail || []).map(function (r) {
+        const grnAmt = Number(r.GrnAmount || 0);
+        const invAmt = Number(r.totalInv || 0);
+        const payAmt = Number(r.totalPayment || 0);
+        running += (grnAmt + invAmt) - payAmt;
+        return Object.assign({}, r, { grnAmt, invAmt, payAmt, runningBalance: running });
+      });
+    }
+
+    function renderDetailTable(detail) {
+      if (!detail || detail.length === 0) {
+        return '<p class="text-muted small mb-0">Tidak ada detail transaksi.</p>';
+      }
+
+      const rowsData = computeRunningBalance(detail);
+
+      const rows = rowsData.map(function (r) {
+        const isGrn = r.TypeID === 'GRN';
+        const tranxId = isGrn ? (r.Id || '-') : '-';
+        const invId = !isGrn ? (r.Id || '-') : '-';
+
+        return `
+          <tr>
+            <td>${r.date ? new Date(r.date).toLocaleDateString('id-ID') : '-'}</td>
+            <td class="text-center">${typeBadge(r.TypeID)}</td>
+            <td>${tranxId}</td>
+            <td>${invId}</td>
+            <td>${r.paymentId || '-'}</td>
+            <td class="text-end">${formatRupiahColored(r.grnAmt)}</td>
+            <td class="text-end">${formatRupiahColored(r.invAmt)}</td>
+            <td class="text-end">${formatRupiahColored(r.payAmt)}</td>
+            <td class="text-end">${formatRupiahColored(r.runningBalance)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const totalGrn = rowsData.reduce((sum, r) => sum + r.grnAmt, 0);
+      const totalInvoice = rowsData.reduce((sum, r) => sum + r.invAmt, 0);
+      const totalPayment = rowsData.reduce((sum, r) => sum + r.payAmt, 0);
+      const finalBalance = rowsData.length ? rowsData[rowsData.length - 1].runningBalance : 0;
+
+      return `
+        <table class="table table-sm table-bordered mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Tanggal</th>
+              <th class="text-center">Type</th>
+              <th>Tranx ID</th>
+              <th>Inv ID</th>
+              <th>Payment ID</th>
+              <th class="text-end">GRN</th>
+              <th class="text-end">Invoice</th>
+              <th class="text-end">Payment</th>
+              <th class="text-end">Balance</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot class="table-light fw-semibold">
+            <tr>
+              <td colspan="5" class="text-end">Total</td>
+              <td class="text-end">${formatRupiahColored(totalGrn)}</td>
+              <td class="text-end">${formatRupiahColored(totalInvoice)}</td>
+              <td class="text-end">${formatRupiahColored(totalPayment)}</td>
+              <td class="text-end">${formatRupiahColored(finalBalance)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      `;
+    }
+
+    // Waterfall: tarik detail transaksi satu-per-satu (berurutan, bukan paralel) untuk setiap supplier
+    async function fetchSaldoAwalWaterfall() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dbName = urlParams.get('dbName') || 'EpixFIN_RMM';
+
+      const startDate = $('#filter-start-date').val();
+      const endDate = $('#filter-end-date').val();
+      const lastPaymentDate = $('#filter-last-payment-date').val() || endDate;
+
+      if (!startDate) {
+        alert('Isi Start Date terlebih dahulu.');
+        return;
+      }
+
+       $('#btn-export-excel').prop('disabled', true);
+      const $btn = $('#btn-fetch-saldo-awal');
+      $btn.prop('disabled', true);
+
+      const total = globalCustomerData.length;
+      for (let i = 0; i < total; i++) {
+        const item = globalCustomerData[i];
+        const encodedId = encodeURIComponent(item.SupplierID || '');
+        const $row = $(`tr[data-supplier-id="${encodedId}"]:not(.detail-row)`);
+        const $cell = $row.find('.saldo-awal-cell');
+        const $detailBtn = $row.find('.btn-toggle-detail');
+        const $detailContainer = $(`tr.detail-row[data-supplier-id="${encodedId}"] .detail-container`);
+
+        $('#waterfall-progress').text(`Memproses ${i + 1} / ${total}: ${item.SupplierID || '-'}`);
+        $cell.html('<span class="spinner-border spinner-border-sm text-primary"></span>');
+
+        try {
+          // await di dalam loop membuat request berjalan satu-per-satu, tidak paralel
+          const { detail } = await fetchSaldoAwalForSupplier(dbName, item.SupplierID, startDate, endDate, lastPaymentDate);
+          console.log('Fetched detail for', item.SupplierID, { detail });
+
+          const rowsData = computeRunningBalance(detail);
+          const finalBalance = rowsData.length ? rowsData[rowsData.length - 1].runningBalance : 0;
+
+          item.saldoAwal = finalBalance;
+          item.saldoAwalDetail = detail;
+          $cell.removeClass('text-muted').removeClass('text-danger fw-semibold').addClass(numClass(item.saldoAwal)).text(formatRupiah(item.saldoAwal));
+          $detailContainer.html(renderDetailTable(detail));
+          $detailBtn.prop('disabled', false);
+        } catch (err) {
+          console.error('Gagal ambil detail untuk', item.SupplierID, err);
+          $cell.removeClass('text-muted').addClass('text-danger').text('Error');
+        }
+      }
+
+      $('#waterfall-progress').text(`Selesai: ${total} supplier diproses.`);
+      $btn.prop('disabled', false);
+      $('#btn-export-excel').prop('disabled', false);
+      $('#search-input').prop('disabled', false);
+    }
+
+    // Export ke Excel: tiap supplier jadi satu grup (judul + tabel detail), dipisah beberapa baris kosong
+    function exportToExcel() {
+      const suppliersWithDetail = globalCustomerData.filter(function (item) {
+        return Array.isArray(item.saldoAwalDetail);
+      });
+
+      if (suppliersWithDetail.length === 0) {
+        alert('Tarik data terlebih dahulu sebelum export.');
+        return;
+      }
+
+      const aoa = [];
+
+      suppliersWithDetail.forEach(function (item) {
+        const rowsData = computeRunningBalance(item.saldoAwalDetail || []);
+        const totalGrn = rowsData.reduce((sum, r) => sum + r.grnAmt, 0);
+        const totalInvoice = rowsData.reduce((sum, r) => sum + r.invAmt, 0);
+        const totalPayment = rowsData.reduce((sum, r) => sum + r.payAmt, 0);
+        const finalBalance = rowsData.length ? rowsData[rowsData.length - 1].runningBalance : 0;
+
+        aoa.push([`Supplier: ${item.SupplierName || '-'} (${item.SupplierID || '-'})`]);
+        aoa.push([`Balance: ${item.saldoAwal || 0}`]);
+        aoa.push(['Tanggal', 'Type', 'Tranx ID', 'Inv ID', 'Payment ID', 'GRN', 'Invoice', 'Payment', 'Balance']);
+
+        rowsData.forEach(function (r) {
+          const isGrn = r.TypeID === 'GRN';
+          aoa.push([
+            r.date ? new Date(r.date).toLocaleDateString('id-ID') : '',
+            r.TypeID || '',
+            isGrn ? (r.Id || '') : '',
+            !isGrn ? (r.Id || '') : '',
+            r.paymentId || '',
+            r.grnAmt,
+            r.invAmt,
+            r.payAmt,
+            r.runningBalance
+          ]);
+        });
+
+        aoa.push(['', '', '', '', 'Total', totalGrn, totalInvoice, totalPayment, finalBalance]);
+        // Jeda beberapa baris kosong sebagai pemisah antar grup supplier
+        aoa.push([]);
+        aoa.push([]);
+      });
+
+      const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Detail Invoice');
+
+      const dbName = new URLSearchParams(window.location.search).get('dbName') || 'EpixFIN_RMM';
+      const safeDbName = dbName.replace(/[^a-z0-9_-]/gi, '_');
+      XLSX.writeFile(workbook, `detail-all-${safeDbName}.xlsx`);
+    }
+
+    // Prefill filter tanggal dari query params URL (startDate, endDate, lastPaymentDate)
+    function prefillFilterFromQueryParams() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const startDate = urlParams.get('startDate');
+      const endDate = urlParams.get('endDate');
+      const lastPaymentDate = urlParams.get('lastPaymentDate');
+
+      if (startDate) $('#filter-start-date').val(startDate);
+      if (endDate) $('#filter-end-date').val(endDate);
+      $('#filter-last-payment-date').val(lastPaymentDate || endDate || '');
+    }
+
+    $(document).ready(function () {
+      prefillFilterFromQueryParams();
+      fetchCustomerData();
+
+      $('#search-input').on('keyup input', function () {
+        const keyword = $(this).val().toLowerCase().trim();
+
+        const filteredData = globalCustomerData.filter(function (item) {
+          return (item.SupplierName && item.SupplierName.toLowerCase().includes(keyword)) ||
+            (item.SupplierID && item.SupplierID.toLowerCase().includes(keyword));
+        });
+
+        renderTable(filteredData);
+      });
+
+      $('#btn-fetch-saldo-awal').on('click', function () {
+        fetchSaldoAwalWaterfall();
+      });
+
+      $('#btn-export-excel').on('click', function () {
+        exportToExcel();
+      });
+
+      $('#report-body').on('click', '.btn-toggle-detail', function () {
+        const encodedId = $(this).closest('tr').data('supplier-id');
+        $(`tr.detail-row[data-supplier-id="${encodedId}"]`).toggleClass('d-none');
+      });
+    });
+  </script>
+</body>
+</html>

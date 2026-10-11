@@ -27,7 +27,7 @@
           Database: <span id="db-name" class="fw-bold text-dark">-</span> | 
           Periode: <span id="report-period" class="fw-bold text-dark">-</span>
         </p>
-        <p>Last Payment: <span id="last-payment" class="fw-bold text-dark">-</span></p>
+        
       </div>
       <div class="d-flex gap-2 ms-auto">
         <button class="btn btn-outline-secondary" onclick="window.print()">
@@ -353,10 +353,11 @@
 
       $.get(apiUrl)
         .done(function (response) {
+          console.log('Data fetched successfully:', response.q);
           const res = typeof response === 'string' ? JSON.parse(response) : response;
 
-          $('#q').text((res.query && res.query.reportQuery) || '');
-          $('#q0').text((res.query && res.query.saldoAwalQuery) || '');
+          $('#q').text((response.q) || '');
+       //   $('#q0').text((res.query && res.query.q.saldoAwalQuery) || '');
 
           $('#db-name').text(res.requestedDb || 'EpixFIN_RMM');
           if (res.filter) {

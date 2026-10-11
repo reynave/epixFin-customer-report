@@ -2,6 +2,32 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const reportController = require('../controllers/reportController');
 
+// Middleware: tolak request jika tahun pada startDate kurang dari 2000
+function validateStartDateYear(req, res, next) {
+  const startDate = (req.query.startDate || '').toString().trim();
+
+  // Jika startDate tidak dikirim, biarkan controller yang menangani validasi wajibnya.
+  if (!startDate) {
+    return next();
+  }
+
+  const year = parseInt(startDate.slice(0, 4), 10);
+
+  if (Number.isNaN(year) || year < 2000) {
+    const dbName = (req.params.dbName || process.env.DB_DATABASE || '').trim();
+    return res.status(400).json({
+      status: 'error',
+      warning: 'Tahun startDate tidak valid (kurang dari 2000).',
+      error: 'Parameter startDate harus memiliki tahun >= 2000 dengan format YYYY-MM-DD.',
+      note: 'Silakan gunakan startDate dengan tahun 2000 atau lebih baru.',
+      requestedDb: dbName || null,
+      received: { startDate },
+    });
+  }
+
+  return next();
+}
+
 router.get('/', (req, res) => {
   const dbName = (req.params.dbName || process.env.DB_DATABASE || '').trim();
   const baseUrl = req.baseUrl || '';
@@ -25,9 +51,9 @@ router.get('/', (req, res) => {
   });
 });
 router.get('/getCustomer', reportController.getCustomer); 
-router.get('/customer', reportController.getReportPage);  
+router.get('/customer', validateStartDateYear, reportController.getReportPage);  
 
-router.get('/customer/detail', reportController.getReportDetail); 
-router.get('/customer/detail/saldo-awal', reportController.getReportDetailSaldoAwal);
+router.get('/customer/detail', validateStartDateYear, reportController.getReportDetail);  
+router.get('/yearly',   reportController.getYearlyReport);  
 
 module.exports = router;

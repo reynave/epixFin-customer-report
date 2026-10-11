@@ -119,10 +119,10 @@
             <label for="endDate">End Date</label>
             <input id="endDate" type="date" required />
           </div>
-          <div class="field full">
+          <!-- <div class="field full">
             <label for="lastPaymentDate">Last Payment Date</label>
             <input id="lastPaymentDate" type="date" required />
-          </div>
+          </div> -->
         </div>
         <button type="submit" id="openBtn">Buka Laporan Customer</button>
         <div class="error" id="errorBox"></div>
@@ -137,7 +137,7 @@
       const dbSelect = document.getElementById('dbSelect');
       const startDateInput = document.getElementById('startDate');
       const endDateInput = document.getElementById('endDate');
-      const lastPaymentDateInput = document.getElementById('lastPaymentDate');
+    //  const lastPaymentDateInput = document.getElementById('lastPaymentDate');
       const errorBox = document.getElementById('errorBox');
       const openBtn = document.getElementById('openBtn');
       const launchForm = document.getElementById('launch-form');
@@ -152,7 +152,7 @@
 
         startDateInput.value = firstDay;
         endDateInput.value = todayStr;
-        lastPaymentDateInput.value = todayStr;
+        // lastPaymentDateInput.value = todayStr;
       }
 
       async function loadDatabases() {
@@ -208,19 +208,19 @@
         const dbName = dbSelect.value;
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
-        const lastPaymentDate = lastPaymentDateInput.value;
+      // = lastPaymentDateInput.value;
 
         if (!dbName) {
           errorBox.textContent = 'Silakan pilih database terlebih dahulu.';
           return;
         }
 
-        if (!startDate || !endDate || !lastPaymentDate) {
+        if (!startDate || !endDate) {
           errorBox.textContent = 'Tanggal wajib diisi semua.';
           return;
         }
 
-        const targetUrl = `customer.html?dbName=${encodeURIComponent(dbName)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&lastPaymentDate=${encodeURIComponent(lastPaymentDate)}`;
+        const targetUrl = `customer.html?dbName=${encodeURIComponent(dbName)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
         window.location.href = targetUrl;
       });
 

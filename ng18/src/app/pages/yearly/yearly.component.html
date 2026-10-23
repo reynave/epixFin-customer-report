@@ -1,0 +1,156 @@
+<div class="container my-2">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <a href="javascript:void(0)" (click)="goBack()" class="btn btn-outline-secondary btn-sm mb-2 shadow-sm">
+        <i class="bi bi-arrow-left me-1"></i> Kembali
+      </a>
+      <h2 class="fw-bold text-dark mb-0">Laporan Tahunan (Yearly)</h2>
+      <p class="text-muted mb-0">
+        Database: <span class="fw-bold text-dark">{{ dbName }}</span> |
+        Periode: <span class="fw-bold text-dark">{{ filter.startDate }} s/d {{ filter.endDate }}</span>
+      </p>
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-outline-secondary" (click)="print()">
+        <i class="bi bi-printer me-1"></i> Cetak
+      </button>
+      <button class="btn btn-outline-secondary" (click)="exportToExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i> Export *.xlsx
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter Tanggal -->
+  <div class="card border-0 shadow-sm mt-3">
+    <div class="card-body py-3">
+      <form (ngSubmit)="fetchYearly()" class="row g-2 align-items-end">
+        <div class="col-auto">
+          <label for="start-date" class="form-label small text-muted mb-1">Start Date</label>
+          <input type="date" id="start-date" class="form-control" [(ngModel)]="startDate" name="startDate" />
+        </div>
+        <div class="col-auto">
+          <label for="end-date" class="form-label small text-muted mb-1">End Date</label>
+          <input type="date" id="end-date" class="form-control" [(ngModel)]="endDate" name="endDate" />
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-dark">
+            <i class="bi bi-funnel me-1"></i> Terapkan
+          </button>
+        </div>
+        <div class="col-auto">
+          <button type="button" class="btn btn-outline-secondary" (click)="resetFilter()">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row g-3 my-1 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total GRN</span>
+          <h3 class="fw-bold text-primary mt-2 mb-0">{{ money(totals.grn) }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total Invoice</span>
+          <h3 class="fw-bold text-dark mt-2 mb-0">{{ money(totals.invoice) }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total Payment</span>
+          <h3 class="fw-bold text-success mt-2 mb-0">{{ money(totals.payment) }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total Balance</span>
+          <h3 class="fw-bold text-danger mt-2 mb-0">{{ money(totals.balance) }}</h3>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Table Report Container -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 border-0">
+      <div class="row align-items-center">
+        <div class="col">
+          <h6 class="fw-bold text-dark mb-0">Rekap Per Bulan</h6>
+        </div>
+        <div class="col text-md-end">
+          <span class="text-muted small">Menampilkan {{ data.length }} bulan</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="report-table">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th scope="col" class="ps-4">Bulan</th>
+              <th scope="col" class="text-end">GRN Amount</th>
+              <th scope="col" class="text-end">Total Invoice</th>
+              <th scope="col" class="text-end">Total Payment</th>
+              <th scope="col" class="text-end pe-4">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngIf="loading">
+              <td colspan="5" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-2 mb-0">Mengambil data dari server...</p>
+              </td>
+            </tr>
+            <tr *ngIf="!loading && error">
+              <td colspan="5" class="text-center py-4 text-danger">
+                <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
+                {{ error }}
+              </td>
+            </tr>
+            <tr *ngIf="!loading && !error && data.length === 0">
+              <td colspan="5" class="text-center py-4 text-muted">
+                <i class="bi bi-search me-1"></i> Tidak ada data ditemukan.
+              </td>
+            </tr>
+            <tr *ngFor="let item of data">
+              <td class="ps-4 fw-semibold">{{ label(item) }}</td>
+              <td class="text-end">{{ money(item.GrnAmount) }}</td>
+              <td class="text-end">{{ money(item.totalInv) }}</td>
+              <td class="text-end">{{ money(item.totalPayment) }}</td>
+              <td class="text-end pe-4" [ngClass]="balanceClass(item)">{{ money(item.balance) }}</td>
+            </tr>
+          </tbody>
+          <tfoot class="table-group-divider fw-bold bg-light">
+            <tr>
+              <td class="ps-4">TOTAL</td>
+              <td class="text-end">{{ money(totals.grn) }}</td>
+              <td class="text-end">{{ money(totals.invoice) }}</td>
+              <td class="text-end">{{ money(totals.payment) }}</td>
+              <td class="text-end pe-4">{{ money(totals.balance) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="my-3 text-muted text-center small">
+  <small>Ver 1.260827.0</small>
+</div>
+

@@ -1,0 +1,204 @@
+<div class="container my-2">
+  <!-- Header Navigation & Action -->
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <a href="javascript:void(0)" (click)="goBack()" class="btn btn-outline-secondary btn-sm mb-2 shadow-sm">
+        <i class="bi bi-arrow-left me-1"></i> Kembali ke Laporan
+      </a>
+      <h2 class="fw-bold text-dark mb-0">Detail Transaksi Supplier: <span class="text-primary">{{ supplierId }}</span></h2>
+      <p class="text-muted mb-0">
+        Database: <span class="fw-bold text-dark">{{ dbName }}</span> |
+        Periode: <span class="fw-bold text-dark">{{ filter.startDate }} s/d {{ filter.endDate }}</span>
+      </p>
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-outline-secondary" (click)="print()">
+        <i class="bi bi-printer me-1"></i> Cetak Detail
+      </button>
+      <button class="btn btn-primary" (click)="exportToExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i> Export *.xlsx
+      </button>
+    </div>
+  </div>
+
+  <div class="mb-2 text-end">
+    <a href="javascript:void(0)" (click)="toggleQuery()"><small>Show/Hide Queries</small></a>
+  </div>
+  <div class="alert alert-light" [class.d-none]="!showQuery" role="alert">
+    <strong>Query Detail:</strong>
+    <code><pre>{{ query }}</pre></code>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Saldo Awal</span>
+          <h3 class="fw-bold text-primary mt-2 mb-0">Rp {{ fmt(summary.saldoAwal) }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total GRN (Blm Invoice)</span>
+          <h3 class="fw-bold text-dark mt-2 mb-0">Rp {{ fmt(summary.totalGrn) }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total Invoice (Tagihan)</span>
+          <h3 class="fw-bold text-dark mt-2 mb-0">Rp {{ fmt(summary.totalInvoice) }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total Payment</span>
+          <h3 class="fw-bold text-success mt-2 mb-0">Rp {{ fmt(summary.totalPayment) }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Sisa Utang (Net Result)</span>
+          <h3 class="fw-bold text-danger mt-2 mb-0">Rp {{ fmt(summary.totalBalance) }}</h3>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Detail Table Container -->
+  <div class="card border-0 shadow-sm">
+    <!-- Search Filter -->
+    <div class="card-header bg-white py-3 border-0">
+      <div class="row align-items-center">
+        <div class="col-md-4">
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="search-input" class="form-control bg-light border-start-0"
+              placeholder="Cari No. Tranx, Inv ID, Payment ID..." [(ngModel)]="keyword" (input)="applyFilter()" />
+          </div>
+        </div>
+        <div class="col-md-8 text-md-end mt-2 mt-md-0">
+          <span class="text-muted small">Menampilkan {{ filtered.length }} dari {{ data.length }} transaksi</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="detail-table">
+          <thead class="table-light">
+            <tr>
+              <th scope="col" class="ps-4">Tanggal</th>
+              <th scope="col" class="text-center">Type</th>
+              <th scope="col">Tranx ID</th>
+              <th scope="col">Inv ID</th>
+              <th scope="col">Payment ID</th>
+              <th scope="col" class="text-end">GRN (Rp)</th>
+              <th scope="col" class="text-end">Invoice (Rp)</th>
+              <th scope="col" class="text-end">Payment (Rp)</th>
+              <th scope="col" class="text-end pe-4">Balance (Rp)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngIf="loading">
+              <td colspan="9" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-2 mb-0">Mengambil detail transaksi dari server...</p>
+              </td>
+            </tr>
+            <tr *ngIf="!loading && error">
+              <td colspan="9" class="text-center py-4 text-danger">
+                <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
+                {{ error }}
+              </td>
+            </tr>
+            <tr *ngIf="!loading && !error && filtered.length === 0">
+              <td colspan="9" class="text-center py-4 text-muted">
+                <i class="bi bi-search me-1"></i> Transaksi tidak ditemukan
+              </td>
+            </tr>
+            <tr *ngFor="let item of filtered">
+              <td class="ps-4">{{ dateStr(item.date) }}</td>
+              <td class="text-center"><span class="badge" [ngClass]="badgeClass(item.TypeID)">{{ item.TypeID || '-' }}</span></td>
+              <td>
+                <code class="text-dark">{{ item.TypeID === 'GRN' ? (item.Id || '-') : '-' }}</code>
+                <button *ngIf="item.historyTranxID?.length" type="button" class="btn btn-link btn-sm p-0 d-block"
+                  (click)="showHistory(item.historyTranxID)">
+                  <i class="bi bi-clock-history me-1"></i>History ({{ item.historyTranxID.length }})
+                </button>
+              </td>
+              <td><span class="badge bg-light text-dark border">{{ item.TypeID !== 'GRN' ? (item.Id || '-') : '-' }}</span></td>
+              <td>{{ item.paymentId || '-' }}</td>
+              <td class="text-end" [ngClass]="neg(item.GrnAmount)">{{ fmt(item.GrnAmount) }}</td>
+              <td class="text-end fw-semibold" [ngClass]="neg(item.totalInv)">{{ fmt(item.totalInv) }}</td>
+              <td class="text-end fw-semibold" [ngClass]="neg(item.totalPayment)">{{ fmt(item.totalPayment) }}</td>
+              <td class="text-end pe-4" [ngClass]="balanceClass(item.balance)">{{ fmt(item.balance) }}</td>
+            </tr>
+          </tbody>
+          <tfoot class="table-group-divider fw-bold bg-light">
+            <tr>
+              <td colspan="5" class="ps-4">TOTAL (FILTERED)</td>
+              <td class="text-end">{{ fmt(footTotals.grn) }}</td>
+              <td class="text-end">{{ fmt(footTotals.invoice) }}</td>
+              <td class="text-end">{{ fmt(footTotals.payment) }}</td>
+              <td class="text-end pe-4">{{ fmt(footTotals.balance) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Modal Riwayat Tranx ID -->
+<div class="modal fade" id="historyModal" tabindex="-1" aria-labelledby="historyModalLabel" aria-hidden="true" #historyModal>
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="historyModalLabel">History Tranx ID</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Tanggal diterima</th>
+                <th>Tranx ID</th>
+                <th>Inv ID</th>
+                <th class="text-end">Inv Amt (Rp)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngIf="historyRecords.length === 0">
+                <td colspan="4" class="text-center text-muted py-3">Tidak ada riwayat</td>
+              </tr>
+              <tr *ngFor="let h of historyRecords">
+                <td>{{ dateStr(h.ReceiverDate) }}</td>
+                <td><code>{{ h.TranxID || '-' }}</code></td>
+                <td>{{ h.InvID || '-' }}</td>
+                <td class="text-end">{{ fmt(h.InvAmt) }}</td>
+              </tr>
+            </tbody>
+            <tfoot class="table-group-divider fw-bold bg-light">
+              <tr>
+                <td colspan="3">TOTAL</td>
+                <td class="text-end">Rp {{ fmt(historyTotal) }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+

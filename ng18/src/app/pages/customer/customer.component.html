@@ -1,0 +1,174 @@
+<div class="container my-2">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <a href="javascript:void(0)" (click)="goBack()" class="btn btn-outline-secondary btn-sm mb-2 shadow-sm">
+        <i class="bi bi-arrow-left me-1"></i> Kembali ke Laporan
+      </a>
+      <h2 class="fw-bold text-dark mb-0">Laporan Utang Supplier</h2>
+      <p class="text-muted mb-0">
+        Database: <span class="fw-bold text-dark">{{ dbName }}</span> |
+        Periode: <span class="fw-bold text-dark">{{ startDate }} s/d {{ endDate }}</span>
+      </p>
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-outline-secondary" (click)="print()">
+        <i class="bi bi-printer me-1"></i> Cetak Detail
+      </button>
+      <button class="btn btn-outline-secondary" (click)="exportToExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i> Export *.xlsx
+      </button>
+      <button class="btn btn-dark" (click)="goToDetailAll()">
+        <i class="bi bi-file-earmark-excel me-1"></i> Detail All Customer
+      </button>
+    </div>
+  </div>
+
+  <div class="mb-2 text-end">
+    <a href="javascript:void(0)" (click)="toggleQuery()"><small>Show/Hide Queries</small></a>
+  </div>
+  <div class="alert alert-light" [class.d-none]="!showQuery" role="alert">
+    <div>
+      <strong>Query Report:</strong>
+      <code><pre>{{ query }}</pre></code>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total Supplier</span>
+          <h3 class="fw-bold text-primary mt-2 mb-0">{{ total }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total Saldo Awal</span>
+          <h3 class="fw-bold text-primary mt-2 mb-0">Rp {{ fmt(summary.totalSaldoAwal) }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total Invoice (Tagihan)</span>
+          <h3 class="fw-bold text-dark mt-2 mb-0">Rp {{ fmt(summary.totalInvoice) }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Total Terbayar (Paid)</span>
+          <h3 class="fw-bold text-success mt-2 mb-0">Rp {{ fmt(summary.totalPayment) }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="text-muted small fw-medium">Sisa Utang (Net Result)</span>
+          <h3 class="fw-bold text-danger mt-2 mb-0">Rp {{ fmt(summary.totalBalance) }}</h3>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Table Report Container -->
+  <div class="card border-0 shadow-sm">
+    <!-- Search Bar Toolbar -->
+    <div class="card-header bg-white py-3 border-0">
+      <div class="row align-items-center">
+        <div class="col">
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="search-input" class="form-control bg-light border-start-0"
+              placeholder="Cari Nama atau ID Supplier..." [(ngModel)]="keyword" (input)="applyFilter()" />
+          </div>
+        </div>
+        <div class="col text-md-end mt-2 mt-md-0">
+          <span class="text-muted small">Menampilkan {{ filtered.length }} dari {{ data.length }} supplier</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="report-table">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th scope="col" class="ps-4">Supplier</th>
+              <th scope="col">ID Supplier</th>
+              <th scope="col" class="text-end">Saldo Awal</th>
+              <th scope="col" class="text-end">GRN</th>
+              <th scope="col" class="text-end">Invoice</th>
+              <th scope="col" class="text-end">Payment</th>
+              <th scope="col" class="text-end">Balance</th>
+              <th scope="col" class="text-center">Status</th>
+              <th scope="col" class="text-center pe-4">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngIf="loading">
+              <td colspan="9" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-2 mb-0">Mengambil data dari server...</p>
+              </td>
+            </tr>
+            <tr *ngIf="!loading && error">
+              <td colspan="9" class="text-center py-4 text-danger">
+                <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
+                {{ error }}
+              </td>
+            </tr>
+            <tr *ngIf="!loading && !error && filtered.length === 0">
+              <td colspan="9" class="text-center py-4 text-muted">
+                <i class="bi bi-search me-1"></i> Data supplier tidak ditemukan
+              </td>
+            </tr>
+            <tr *ngFor="let item of filtered">
+              <td class="ps-4 fw-semibold">{{ item.SupplierName || '-' }}</td>
+              <td><code class="text-secondary">{{ item.SupplierID || '-' }}</code></td>
+              <td class="text-end" [ngClass]="saldoAwalClass(item.saldoAwal)">{{ fmt(item.saldoAwal) }}</td>
+              <td class="text-end" [ngClass]="neg(item.totalGRN ?? item.GrnAmount)">{{ fmt(item.totalGRN ?? item.GrnAmount) }}</td>
+              <td class="text-end">{{ fmt(item.totalInv) }}</td>
+              <td class="text-end">{{ fmt(item.totalPayment) }}</td>
+              <td class="text-end" [ngClass]="resultClass(item.balance)">{{ fmt(item.balance) }}</td>
+              <td class="text-center">
+                <span class="badge rounded-pill" [ngClass]="statusClass(item.balance)">{{ statusLabel(item.balance) }}</span>
+              </td>
+              <td class="text-center pe-4">
+                <a [routerLink]="['/customer-detail']"
+                  [queryParams]="{ id: item.SupplierID, startDate: startDate, endDate: endDate, lastPaymentDate: lastPaymentDate, dbName: dbName }"
+                  class="btn btn-sm btn-outline-primary shadow-sm">
+                  Detail
+                </a>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot class="table-group-divider fw-bold bg-light">
+            <tr>
+              <td colspan="2" class="ps-4">TOTAL (FILTERED)</td>
+              <td class="text-end">{{ fmt(footTotals.saldoAwal) }}</td>
+              <td class="text-end">{{ fmt(footTotals.grn) }}</td>
+              <td class="text-end">{{ fmt(footTotals.invoice) }}</td>
+              <td class="text-end">{{ fmt(footTotals.paid) }}</td>
+              <td class="text-end">{{ fmt(footTotals.result) }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="my-3 text-muted text-center small">
+  <small>Ver 1.260827.0</small>
+</div>
+

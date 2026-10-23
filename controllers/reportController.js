@@ -90,17 +90,20 @@ function QuerySaldoAwal(start = '2026-01-01') {
   const formattedStartDate = startDate.toISOString().split('T')[0];
 
   const q0 = `
-      Declare @startDate DateTime 
-         
-      Set @startDate = '${formattedStartDate}'  
+ 
+      Declare @startDate date
+      Declare @endDate date
 
+      Set @startDate = '2000-01-01'
+      Set @endDate = '${formattedStartDate}'  
+ 
       select t1.SupplierID, sum(t1.Invoice - t1.Paid) 'saldoAwal' from (
 
         -- TAGIHAN berdasrkan GRN
         select g.SupplierID , g.ReceivedDate 'Date',  g.TranxID,  g.TotalAmount 'Invoice',
          0 as 'Paid' , 'GRN' as 'ID'
         from FinMsGRN g
-        where g.ReceivedDate < @startDate 
+        where g.ReceivedDate between @startDate and @endDate
 
          UNION ALL 
        -- GRN SUDAH DIBAYAR (1 baris per TranxID, tidak dobel walau invoice/payment detail-nya banyak)
@@ -112,7 +115,7 @@ function QuerySaldoAwal(start = '2026-01-01') {
         join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
         join FinApPaymentDetail as appd on apid.InvID = appd.InvID
         left join FinApPayment as p on p.PaymentID = appd.PaymentID
-        where p.PaymentDate < @startDate
+        where p.PaymentDate between @startDate and @endDate
         group by g.SupplierID, g.TranxID, g.TotalAmount
 
       ) t1
@@ -589,3 +592,123 @@ exports.getYearlyReport = async (req, res) => {
 }
     
  
+exports.getJournalAp = async (req, res) => {
+  const dbName = validateDbNameOrRespond(req, res);
+  if (!dbName) return;
+
+  try {
+       const pool = await getPool(dbName);
+    // Default laporan tahunan Jan s/d Des 2026, bisa di-override lewat query
+    const startDate = req.query.startDate || '2026-01-01';
+    const endDate = req.query.endDate || '2026-12-31';
+
+   // const start = new Date(startDate);
+   // const end = new Date(endDate);
+
+    const q = `
+      Declare @startDate DateTime 
+      Declare @endDate DateTime 
+        
+      Set @startDate = '${startDate}'  
+      set @endDate = '${endDate}'
+
+    select t1.* from (
+      select  'APR' as 'prefix',  g.TranxID as 'id', g.TotalAmount as 'amount', g.SupplierID , s.SupplierName, g.ReceivedDate as 'date'
+      from FinMsGRN as g
+      left join FinMsSupplier as s on s.SupplierID = g.SupplierID
+      where g.ReceivedDate between @startDate and @endDate  union all
+
+      select 'API' as 'prefix', i.InvID as 'id', i.InvTotal as 'amount', i.SupplierID ,s.SupplierName, i.InvDate as 'date'
+      from FinApInvoice i 
+      left join FinMsSupplier as s on s.SupplierID = i.SupplierID
+      where i.InvDate   between @startDate and @endDate
+
+      union all
+      select 'APP' as 'prefix', p.PaymentID as 'id', p.Amount as 'amount',  p.SupplierID ,s.SupplierName, p.PaymentDate as 'date'
+      from FinApPayment p 
+      left join FinMsSupplier as s on s.SupplierID = p.SupplierID
+      where  p.PaymentDate   between @startDate and @endDate and p.status = 'CLOSED'
+      ) as t1 
+    order by t1.date asc
+ 
+    `;
+
+
+
+  const result = await pool.query(q);
+
+    return res.json({
+      status: 'ok',
+      requestedDb: dbName,
+      filter: { startDate, endDate },
+      q :q,
+      result : result.recordsets[0],
+    });
+  }
+  catch (err) {
+    return res.status(500).json({
+      status: 'error getJournalAp',
+      requestedDb: dbName,
+      error: 'Gagal ambil detail laporan: ' + err.message,
+    });
+  }
+}
+
+
+exports.getJournalAmount = async (req, res) => {
+  const dbName = validateDbNameOrRespond(req, res);
+  if (!dbName) return;
+
+  try {
+       const pool = await getPool(dbName);
+    // Default laporan tahunan Jan s/d Des 2026, bisa di-override lewat query
+    const id = req.query.id ;
+    const prefix = req.query.prefix ;
+
+   // const start = new Date(startDate);
+   // const end = new Date(endDate);
+
+    const q = `
+        select * from FinJurnalVoucher as v
+        where v.voucherno like '%${id}' and v.voucherno like '${prefix}%' ;   
+    `;
+
+
+
+  let result = await pool.query(q);
+
+    // Kalau query utama (prefix + id) tidak menghasilkan data,
+    // fallback ke pencarian yang lebih longgar (top 1 berdasarkan id saja).
+    if (!result.recordset || result.recordset.length === 0) {
+      const q2 = `
+        select top 1 * from FinJurnalVoucher as v
+        where v.voucherno like '%${id}%' ;
+      `;
+
+      result = await pool.query(q2);
+
+      return res.json({
+        status: 'ok',
+        requestedDb: dbName,
+        filter: req.query,
+        q: q2,
+        result: result.recordsets[0],
+      });
+    }
+
+    return res.json({
+      status: 'ok',
+      requestedDb: dbName,
+      filter: req.query,
+      q: q,
+      result: result.recordsets[0],
+    });
+  }
+  catch (err) {
+    return res.status(500).json({
+      status: 'error getJournalAmount',
+      requestedDb: dbName,
+      error: 'Gagal ambil detail laporan: ' + err.message,
+    });
+  }
+}

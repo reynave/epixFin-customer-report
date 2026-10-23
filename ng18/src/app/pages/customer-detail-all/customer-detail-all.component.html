@@ -1,0 +1,197 @@
+<div class="container my-2">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <a href="javascript:void(0)" (click)="goBack()" class="btn btn-outline-secondary btn-sm mb-2 shadow-sm">
+        <i class="bi bi-arrow-left me-1"></i> Kembali
+      </a>
+      <h2 class="fw-bold text-dark mb-0">Daftar Customer / Supplier</h2>
+      <p class="text-muted mb-0">
+        Database: <span class="fw-bold text-dark">{{ dbName }}</span>
+      </p>
+      <p class="mb-0">
+        Total Saldo Awal: <span class="fw-bold text-dark">{{ fmt(grandTotals.saldoAwal) }}</span> |
+        Total Invoice: <span class="fw-bold text-dark">{{ fmt(grandTotals.totalInvoice) }}</span> |
+        Total Payment: <span class="fw-bold text-dark">{{ fmt(grandTotals.totalPayment) }}</span> |
+        Total Balance: <span class="fw-bold text-dark">{{ fmt(grandTotals.totalBalance) }}</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- Filter Periode Invoice -->
+  <div class="card border-0 shadow-sm mt-3">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-auto">
+          <label for="filter-start-date" class="form-label small text-muted mb-1">Start Date</label>
+          <input type="date" id="filter-start-date" class="form-control form-control-sm" [(ngModel)]="startDate" name="startDate" />
+        </div>
+        <div class="col-auto">
+          <label for="filter-end-date" class="form-label small text-muted mb-1">End Date</label>
+          <input type="date" id="filter-end-date" class="form-control form-control-sm" [(ngModel)]="endDate" name="endDate" />
+        </div>
+        <div class="col-auto">
+          <label for="filter-last-payment-date" class="form-label small text-muted mb-1">Last Payment Date</label>
+          <input type="date" id="filter-last-payment-date" class="form-control form-control-sm" [(ngModel)]="lastPaymentDate" name="lastPaymentDate" />
+        </div>
+        <div class="col-auto">
+          <button type="button" class="btn btn-primary btn-sm" (click)="fetchAllDetails()" [disabled]="processing">
+            <i class="bi bi-play-fill me-1"></i> Tarik Data
+          </button>
+        </div>
+        <div class="col-auto">
+          <button type="button" class="btn btn-success btn-sm" (click)="exportToExcel()" [disabled]="processing || !exportReady">
+            <i class="bi bi-file-earmark-excel me-1"></i> Export to Excel
+          </button>
+        </div>
+        <div class="col-auto">
+          <span class="text-muted small">
+            <small>{{ progress || 'Setelah Tarik Data Selesai baru bisa download excel' }}</small>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Table Container -->
+  <div class="card border-0 shadow-sm mt-3">
+    <!-- Search Bar Toolbar -->
+    <div class="card-header bg-white py-3 border-0">
+      <div class="row align-items-center">
+        <div class="col">
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="search-input" class="form-control bg-light border-start-0"
+              placeholder="Cari Nama atau ID Supplier..." [(ngModel)]="keyword" (input)="applyFilter()" [disabled]="!exportReady" />
+          </div>
+        </div>
+        <div class="col text-md-end mt-2 mt-md-0">
+          <span class="text-muted small">Menampilkan {{ filtered.length }} dari {{ data.length }} supplier</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="report-table">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th scope="col" class="ps-4">Supplier</th>
+              <th scope="col">ID Supplier</th>
+              <th scope="col" class="text-end">Saldo Awal</th>
+              <th scope="col" class="text-end">Total Invoice</th>
+              <th scope="col" class="text-end">Total Payment</th>
+              <th scope="col" class="text-end">Total Balance</th>
+              <th scope="col" class="text-center pe-4">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngIf="loading">
+              <td colspan="7" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-2 mb-0">Mengambil data dari server...</p>
+              </td>
+            </tr>
+            <tr *ngIf="!loading && error">
+              <td colspan="7" class="text-center py-4 text-danger">
+                <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
+                {{ error }}
+              </td>
+            </tr>
+            <tr *ngIf="!loading && !error && filtered.length === 0">
+              <td colspan="7" class="text-center py-4 text-muted">Tidak ada data ditemukan.</td>
+            </tr>
+
+            <ng-container *ngFor="let item of filtered">
+              <tr>
+                <td class="ps-4 fw-semibold">{{ item.SupplierName || '-' }}</td>
+                <td><code class="text-secondary">{{ item.SupplierID || '-' }}</code></td>
+                <td class="text-end">
+                  <span *ngIf="item.loadingDetail" class="spinner-border spinner-border-sm text-primary"></span>
+                  <span *ngIf="!item.loadingDetail && item.detailError" class="text-danger">Error</span>
+                  <span *ngIf="!item.loadingDetail && !item.detailError && !item.detailLoaded" class="text-muted">-</span>
+                  <span *ngIf="!item.loadingDetail && !item.detailError && item.detailLoaded" [ngClass]="neg(item.saldoAwal)">{{ fmt(item.saldoAwal) }}</span>
+                </td>
+                <td class="text-end" [ngClass]="item.detailLoaded ? neg(item.summary?.totalInvoice) : 'text-muted'">
+                  <span *ngIf="item.detailLoaded">{{ fmt(item.summary?.totalInvoice) }}</span>
+                  <span *ngIf="!item.detailLoaded">-</span>
+                </td>
+                <td class="text-end" [ngClass]="item.detailLoaded ? neg(item.summary?.totalPayment) : 'text-muted'">
+                  <span *ngIf="item.detailLoaded">{{ fmt(item.summary?.totalPayment) }}</span>
+                  <span *ngIf="!item.detailLoaded">-</span>
+                </td>
+                <td class="text-end" [ngClass]="item.detailLoaded ? neg(item.summary?.totalBalance) : 'text-muted'">
+                  <span *ngIf="item.detailLoaded">{{ fmt(item.summary?.totalBalance) }}</span>
+                  <span *ngIf="!item.detailLoaded">-</span>
+                </td>
+                <td class="text-center pe-4">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" (click)="toggleDetail(item)" [disabled]="!item.detailLoaded">
+                    <i class="bi bi-list-ul me-1"></i> Detail
+                  </button>
+                </td>
+              </tr>
+              <tr *ngIf="item.expanded">
+                <td colspan="7" class="p-0">
+                  <div class="detail-container p-3 bg-white border-top">
+                    <ng-container *ngIf="item.saldoAwalDetail?.length; else emptyDetail">
+                      <div class="small text-muted mb-2">Saldo Awal:
+                        <span class="fw-semibold" [ngClass]="neg(item.summary?.saldoAwal)">{{ fmt(item.summary?.saldoAwal) }}</span>
+                      </div>
+                      <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                          <tr>
+                            <th>Tanggal</th>
+                            <th class="text-center">Type</th>
+                            <th>Tranx ID</th>
+                            <th>Inv ID</th>
+                            <th>Payment ID</th>
+                            <th class="text-end">GRN</th>
+                            <th class="text-end">Invoice</th>
+                            <th class="text-end">Payment</th>
+                            <th class="text-end">Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr *ngFor="let r of item.saldoAwalDetail">
+                            <td>{{ dateStr(r.date) }}</td>
+                            <td class="text-center"><span class="badge" [ngClass]="badgeClass(r.TypeID)">{{ r.TypeID || '-' }}</span></td>
+                            <td>{{ r.TypeID === 'GRN' ? (r.Id || '-') : '-' }}</td>
+                            <td>{{ r.TypeID !== 'GRN' ? (r.Id || '-') : '-' }}</td>
+                            <td>{{ r.paymentId || '-' }}</td>
+                            <td class="text-end" [ngClass]="neg(r.GrnAmount)">{{ fmt(r.GrnAmount) }}</td>
+                            <td class="text-end" [ngClass]="neg(r.totalInv)">{{ fmt(r.totalInv) }}</td>
+                            <td class="text-end" [ngClass]="neg(r.totalPayment)">{{ fmt(r.totalPayment) }}</td>
+                            <td class="text-end" [ngClass]="neg(r.balance)">{{ fmt(r.balance) }}</td>
+                          </tr>
+                        </tbody>
+                        <tfoot class="table-light fw-semibold">
+                          <tr>
+                            <td colspan="5" class="text-end">Total</td>
+                            <td class="text-end" [ngClass]="neg(item.summary?.totalGrn)">{{ fmt(item.summary?.totalGrn) }}</td>
+                            <td class="text-end" [ngClass]="neg(item.summary?.totalInvoice)">{{ fmt(item.summary?.totalInvoice) }}</td>
+                            <td class="text-end" [ngClass]="neg(item.summary?.totalPayment)">{{ fmt(item.summary?.totalPayment) }}</td>
+                            <td class="text-end" [ngClass]="neg(item.summary?.totalBalance)">{{ fmt(item.summary?.totalBalance) }}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </ng-container>
+                    <ng-template #emptyDetail>
+                      <p class="text-muted small mb-0">Tidak ada detail transaksi.</p>
+                    </ng-template>
+                  </div>
+                </td>
+              </tr>
+
+            </ng-container>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="my-3 text-muted text-center small">
+  <small>Ver 1.260827.0</small>
+</div>
+

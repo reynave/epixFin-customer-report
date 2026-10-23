@@ -1,0 +1,31 @@
+<div class="launcher-card">
+  <h1>Epix Report</h1>
+  <p class="muted">Pilih database dan periode, lalu buka laporan utang supplier.</p>
+
+  <form (ngSubmit)="onSubmit()">
+    <div class="form-grid">
+      <div class="field full">
+        <label for="dbSelect">Database</label>
+        <select id="dbSelect" [(ngModel)]="dbName" name="dbName" required>
+          <option value="" [disabled]="loading">{{ loading ? 'Memuat daftar database...' : '-- Pilih Database --' }}</option>
+          <option *ngFor="let db of databases" [value]="db">{{ db }}</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="startDate">Start Date</label>
+        <input id="startDate" type="date" [(ngModel)]="startDate" name="startDate" required />
+      </div>
+      <div class="field">
+        <label for="endDate">End Date</label>
+        <input id="endDate" type="date" [(ngModel)]="endDate" name="endDate" required />
+      </div>
+    </div>
+    <button type="submit" id="openBtn">Buka Laporan Customer</button>
+    <div class="error">{{ error }}</div>
+  </form>
+
+  <div class="api">
+    API list database: <code>GET /databases</code>
+  </div>
+</div>
+

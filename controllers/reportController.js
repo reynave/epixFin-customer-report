@@ -213,7 +213,7 @@ exports.getReportPage = async (req, res) => {
 
         union all
 
-        select p.SupplierID,  0  as 'GrnAmount', 0  as 'totalInv',sum(pd.AmtAdj + pd.PayAmt) as 'totalPayment' 
+        select p.SupplierID,  0  as 'GrnAmount', 0  as 'totalInv',sum( pd.PayAmt) as 'totalPayment' 
         from FinApPaymentDetail  pd
         join FinApPayment as p on p.PaymentID = pd.PaymentID
         where  p.PaymentDate between  @startDate and @endDate and  p.Status = 'CLOSED'
@@ -334,44 +334,44 @@ exports.getReportDetail = async (req, res) => {
          
 select t1.TypeID, t1.id as 'Id', 
 
-			 STUFF((
-				select ', ' + pd.PaymentID
-				from FinApPaymentDetail pd
-				join FinApPayment as p on p.PaymentID = pd.PaymentID
-				where pd.InvID = t1.id  and  p.PaymentDate between  @startDate and @endDate
-				for xml path('')
-			), 1, 2, '') as 'paymentId', 
-			(select a.InvDate from FinApInvoice a where InvID = t1.id )  'date',
+      STUFF((
+      select ', ' + pd.PaymentID
+      from FinApPaymentDetail pd
+      join FinApPayment as p on p.PaymentID = pd.PaymentID
+      where pd.InvID = t1.id  and  p.PaymentDate between  @startDate and @endDate
+      for xml path('')
+    ), 1, 2, '') as 'paymentId', 
+    (select a.InvDate from FinApInvoice a where InvID = t1.id )  'date',
 
-sum(t1.GrnAmount) as 'GrnAmount', sum(t1.totalInv) as 'totalInv', sum( t1.totalPayment) as 'totalPayment' ,
-sum((t1.totalInv + t1.GrnAmount)  -t1.totalPayment )  as 'balance'
-from (
+      sum(t1.GrnAmount) as 'GrnAmount', sum(t1.totalInv) as 'totalInv', sum( t1.totalPayment) as 'totalPayment' ,
+      sum((t1.totalInv + t1.GrnAmount)  -t1.totalPayment )  as 'balance'
+      from (
 
-select  'GRN' as 'TypeID', g.TranxID as 'id', (g.TotalAmount) as 'GrnAmount' , 0  'totalInv', 0 'totalPayment' 
-from FinMsGRN as g
-left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
-where  g.ReceivedDate between  @startDate and @endDate
-and id.InvID is null 
-and   g.SupplierID = @supplierId
+      select  'GRN' as 'TypeID', g.TranxID as 'id', (g.TotalAmount) as 'GrnAmount' , 0  'totalInv', 0 'totalPayment' 
+      from FinMsGRN as g
+      left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
+      where  g.ReceivedDate between  @startDate and @endDate
+      and id.InvID is null 
+      and   g.SupplierID = @supplierId
 
-union all
+      union all
 
-select 'INV' as 'TypeID', i.InvID as 'id',    0  as 'GrnAmount', (i.InvTotal ) as 'totalInv', 0 'totalPayment'
-from FinApInvoice as i
-where i.InvDate between  @startDate and @endDate
-and   i.SupplierID = @supplierId
+      select 'INV' as 'TypeID', i.InvID as 'id',    0  as 'GrnAmount', (i.InvTotal ) as 'totalInv', 0 'totalPayment'
+      from FinApInvoice as i
+      where i.InvDate between  @startDate and @endDate
+      and   i.SupplierID = @supplierId
 
-union all
+      union all
 
-select  'INV' as 'TypeID', pd.InvID,  0  as 'GrnAmount', 0  as 'totalInv',(pd.Amount) 'totalPayment' 
-from FinApPaymentDetail  pd
-join FinApPayment as p on p.PaymentID = pd.PaymentID
-where  p.PaymentDate between  @startDate and @endDate and  p.Status = 'CLOSED'
-and   p.SupplierID = @supplierId
+      select  'INV' as 'TypeID', pd.InvID,  0  as 'GrnAmount', 0  as 'totalInv',(pd.Amount) 'totalPayment' 
+      from FinApPaymentDetail  pd
+      join FinApPayment as p on p.PaymentID = pd.PaymentID
+      where  p.PaymentDate between  @startDate and @endDate and  p.Status = 'CLOSED'
+      and   p.SupplierID = @supplierId
 
- ) as t1 
- group by t1.id, t1.TypeID
- order by t1.id ASC;
+      ) as t1 
+      group by t1.id, t1.TypeID
+      order by t1.id ASC;
       
       `;
     const result = await pool.query(q);
@@ -430,10 +430,7 @@ and   p.SupplierID = @supplierId
     `;
     const result0 = await pool.query(q0);
     const saldoAwal = result0.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
-
-
-    
-    
+ 
 
     return res.json({
       status: 'ok',
@@ -612,26 +609,71 @@ exports.getJournalAp = async (req, res) => {
       Set @startDate = '${startDate}'  
       set @endDate = '${endDate}'
 
-    select t1.* from (
-      select  'APR' as 'prefix',  g.TranxID as 'id', g.TotalAmount as 'amount', g.SupplierID , s.SupplierName, g.ReceivedDate as 'date'
+      select t1.* from (
+        select  'APR' as 'prefix',  g.TranxID as 'id', g.TotalAmount as 'amount', g.SupplierID , s.SupplierName, g.ReceivedDate as 'date'
+        from FinMsGRN as g
+        left join FinMsSupplier as s on s.SupplierID = g.SupplierID
+        where g.ReceivedDate between @startDate and @endDate  union all
+
+        select 'API' as 'prefix', i.InvID as 'id', i.InvTotal as 'amount', i.SupplierID ,s.SupplierName, i.InvDate as 'date'
+        from FinApInvoice i 
+        left join FinMsSupplier as s on s.SupplierID = i.SupplierID
+        where i.InvDate   between @startDate and @endDate
+
+        union all
+        select 'APP' as 'prefix', p.PaymentID as 'id', p.Amount as 'amount',  p.SupplierID ,s.SupplierName, p.PaymentDate as 'date'
+        from FinApPayment p 
+        left join FinMsSupplier as s on s.SupplierID = p.SupplierID
+        where  p.PaymentDate   between @startDate and @endDate and p.status = 'CLOSED'
+      ) as t1 
+  
+    `;
+
+
+
+    const qGRN = `
+      Declare @startDate DateTime 
+      Declare @endDate DateTime 
+        
+      Set @startDate = '${startDate}'  
+      set @endDate = '${endDate}' 
+
+      select sum(g.TotalAmount) as 'amount'
       from FinMsGRN as g
       left join FinMsSupplier as s on s.SupplierID = g.SupplierID
-      where g.ReceivedDate between @startDate and @endDate  union all
+      where g.ReceivedDate between @startDate and @endDate    
+    `; 
+  const GRN = await pool.query(qGRN);
 
-      select 'API' as 'prefix', i.InvID as 'id', i.InvTotal as 'amount', i.SupplierID ,s.SupplierName, i.InvDate as 'date'
-      from FinApInvoice i 
-      left join FinMsSupplier as s on s.SupplierID = i.SupplierID
-      where i.InvDate   between @startDate and @endDate
 
-      union all
-      select 'APP' as 'prefix', p.PaymentID as 'id', p.Amount as 'amount',  p.SupplierID ,s.SupplierName, p.PaymentDate as 'date'
-      from FinApPayment p 
-      left join FinMsSupplier as s on s.SupplierID = p.SupplierID
-      where  p.PaymentDate   between @startDate and @endDate and p.status = 'CLOSED'
-      ) as t1 
-    order by t1.date asc
- 
-    `;
+   const qAPI = `
+      Declare @startDate DateTime 
+      Declare @endDate DateTime 
+        
+      Set @startDate = '${startDate}'  
+      set @endDate = '${endDate}' 
+
+       select sum(i.InvTotal) as 'amount' 
+        from FinApInvoice i 
+        left join FinMsSupplier as s on s.SupplierID = i.SupplierID
+        where i.InvDate   between @startDate and @endDate 
+    `; 
+  const API = await pool.query(qAPI);
+
+
+   const qAPP = `
+      Declare @startDate DateTime 
+      Declare @endDate DateTime 
+        
+      Set @startDate = '${startDate}'  
+      set @endDate = '${endDate}' 
+
+      select  sum(p.Amount) as 'amount'
+        from FinApPayment p 
+        left join FinMsSupplier as s on s.SupplierID = p.SupplierID
+        where  p.PaymentDate   between @startDate and @endDate and p.status = 'CLOSED'
+    `; 
+  const APP = await pool.query(qAPP);
 
 
 
@@ -642,6 +684,12 @@ exports.getJournalAp = async (req, res) => {
       requestedDb: dbName,
       filter: { startDate, endDate },
       q :q,
+      summary : {
+        grn : GRN.recordsets[0][0]['amount'],
+        api : API.recordsets[0][0]['amount'],
+ app : APP.recordsets[0][0]['amount'],
+
+      },
       result : result.recordsets[0],
     });
   }

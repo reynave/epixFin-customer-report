@@ -21,6 +21,11 @@
       <button class="btn btn-dark" (click)="goToDetailAll()">
         <i class="bi bi-file-earmark-excel me-1"></i> Detail All Customer
       </button>
+      <a [routerLink]="['/journal']"
+        [queryParams]="{ dbName: dbName, startDate: startDate, endDate: endDate }"
+        class="btn btn-outline-dark">
+        <i class="bi bi-journal-text me-1"></i> Jurnal AP
+      </a>
     </div>
   </div>
 

@@ -25,6 +25,7 @@ export class JournalComponent implements OnInit {
   error = '';
   loadingAmount = false;
   amountProgress = '';
+  summary = { grn: 0, api: 0, app: 0 };
 
   constructor(private route: ActivatedRoute, private reportService: ReportService) {}
 
@@ -41,6 +42,7 @@ export class JournalComponent implements OnInit {
     this.error = '';
     if (!this.startDate || !this.endDate) {
       this.data = [];
+      this.summary = { grn: 0, api: 0, app: 0 };
       this.error = 'Silakan isi Start Date dan End Date terlebih dahulu.';
       return;
     }
@@ -54,17 +56,22 @@ export class JournalComponent implements OnInit {
           if (res.status === 'error') {
             this.error = res.error || 'Terjadi kesalahan pada server.';
             this.data = [];
+            this.summary = { grn: 0, api: 0, app: 0 };
             return;
           }
+        
+
           this.dbName = res.requestedDb || this.dbName;
           this.filter = res.filter || { startDate: this.startDate, endDate: this.endDate };
           this.data = res.result || [];
+          this.summary = res.summary || { grn: 0, api: 0, app: 0 };
           this.totalAmount = this.data.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
         },
         error: () => {
           this.loading = false;
           this.error = 'Gagal mengambil data dari server.';
           this.data = [];
+          this.summary = { grn: 0, api: 0, app: 0 };
         },
       });
   }
@@ -112,11 +119,13 @@ export class JournalComponent implements OnInit {
       { wch: 10 }, // Prefix
       { wch: 12 }, // Type
       { wch: 28 }, // ID
+      { wch: 28 }, // Voucher
       { wch: 30 }, // Supplier
       { wch: 16 }, // ID Supplier
       { wch: 16 }, // Amount
       { wch: 16 }, // Debit
       { wch: 16 }, // Credit
+      { wch: 16 }, // Selisih
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -142,11 +151,13 @@ export class JournalComponent implements OnInit {
       Prefix: r.prefix || '',
       Type: this.prefixLabel(r.prefix),
       ID: r.id || '',
+      Voucher: r.voucherno || '',
       Supplier: r.SupplierName || '',
       'ID Supplier': r.SupplierID || '',
       Amount: Number(r.amount) || 0,
       Debit: r.amountLoaded ? Number(r.debit) || 0 : '',
       Credit: r.amountLoaded ? Number(r.credit) || 0 : '',
+      Selisih: r.amountLoaded ? (Number(r.amount) || 0) - (Number(r.debit) || 0) : '',
     }));
   }
 
@@ -186,6 +197,7 @@ export class JournalComponent implements OnInit {
       if (!item.id || !item.prefix) {
         item.debit = 0;
         item.credit = 0;
+        item.voucherno = '';
         item.amountLoaded = true;
         continue;
       }
@@ -205,13 +217,19 @@ export class JournalComponent implements OnInit {
         const rows = res.result || [];
         let debit = 0;
         let credit = 0;
+        const vouchers: string[] = [];
         for (const row of rows) {
           debit += this.pickDebit(row);
           credit += this.pickCredit(row);
+          const v = this.pickVoucherNo(row);
+          if (v && !vouchers.includes(v)) {
+            vouchers.push(v);
+          }
         }
 
         item.debit = debit;
         item.credit = credit;
+        item.voucherno = vouchers.join(', ');
         item.amountLoaded = true;
         item.amountLoading = false;
       } catch (err) {
@@ -240,6 +258,11 @@ export class JournalComponent implements OnInit {
   private pickCredit(row: any): number {
     const val = row.Credit ?? row.credit ?? row.Kredit ?? row.CreditAmount ?? row.CreditAmt;
     return this.toNum(val);
+  }
+
+  private pickVoucherNo(row: any): string {
+    const val = row.voucherno ?? row.VoucherNo ?? row.VoucherNumber ?? row.Voucher;
+    return val == null ? '' : String(val);
   }
 }
 

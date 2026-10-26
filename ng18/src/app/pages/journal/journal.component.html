@@ -62,6 +62,26 @@
     </div>
   </div>
 
+  <!-- Summary -->
+  <div class="card border-0 shadow-sm mt-3">
+    <div class="card-body py-3">
+      <div class="row g-3 text-center">
+        <div class="col-6 col-md-4">
+          <div class="text-muted small fw-medium">GRN (APR)</div>
+          <h5 class="fw-bold text-info mb-0">{{ fmt(summary.grn) }}</h5>
+        </div>
+        <div class="col-6 col-md-4">
+          <div class="text-muted small fw-medium">Invoice (API)</div>
+          <h5 class="fw-bold text-primary mb-0">{{ fmt(summary.api) }}</h5>
+        </div>
+        <div class="col-6 col-md-4">
+          <div class="text-muted small fw-medium">Payment (APP)</div>
+          <h5 class="fw-bold text-success mb-0">{{ fmt(summary.app) }}</h5>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
 
   <!-- Table Container -->
@@ -74,17 +94,18 @@
               <th scope="col" class="ps-4">Tanggal</th>
               <th scope="col" class="text-center">Prefix</th>
               <th scope="col">ID</th>
+              <th scope="col">Voucher</th>
               <th scope="col">Supplier</th>
               <th scope="col">ID Supplier</th>
               <th scope="col" class="text-end pe-4">Amount</th>
               <th>Debit</th>
               <th>Credit</th>
-
+              <th>Selisi</th>
             </tr>
           </thead>
           <tbody>
             <tr *ngIf="loading">
-              <td colspan="8" class="text-center py-5">
+              <td colspan="10" class="text-center py-5">
                 <div class="spinner-border text-primary" role="status">
                   <span class="visually-hidden">Loading...</span>
                 </div>
@@ -92,24 +113,28 @@
               </td>
             </tr>
             <tr *ngIf="!loading && error">
-              <td colspan="8" class="text-center py-4 text-danger">
+              <td colspan="10" class="text-center py-4 text-danger">
                 <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
                 {{ error }}
               </td>
             </tr>
             <tr *ngIf="!loading && !error && data.length === 0">
-              <td colspan="8" class="text-center py-4 text-muted">
+              <td colspan="10" class="text-center py-4 text-muted">
                 <i class="bi bi-search me-1"></i> Tidak ada data ditemukan.
               </td>
             </tr>
-            <tr *ngFor="let r of data">
+            <tr *ngFor="let r of data" class="{{(r.amount - r.debit) != 0 &&  r.debit > 0 ? 'tr-warning' : ''}}">
               <td class="ps-4">{{ dateStr(r.date) }}</td>
               <td class="text-center"><span class="badge" [ngClass]="prefixBadgeClass(r.prefix)">{{
                   prefixLabel(r.prefix) }}</span></td>
               <td><code class="text-secondary">{{ r.id || '-' }}</code></td>
+              <td><code class="text-secondary">{{ r.voucherno || '-' }}</code></td>
               <td class="fw-semibold">{{ r.SupplierName || '-' }}</td>
               <td><code class="text-secondary">{{ r.SupplierID || '-' }}</code></td>
               <td class="text-end pe-4">{{ fmt(r.amount) }}</td>
+
+             
+
               <td class="text-end">
                 <span *ngIf="r.amountLoading" class="spinner-border spinner-border-sm text-primary"></span>
                 <span *ngIf="!r.amountLoading && r.amountError" class="text-danger">Error</span>
@@ -121,6 +146,9 @@
                 <span *ngIf="!r.amountLoading && r.amountError" class="text-danger">Error</span>
                 <span *ngIf="!r.amountLoading && !r.amountError && r.amountLoaded">{{ fmt(r.credit) }}</span>
                 <span *ngIf="!r.amountLoading && !r.amountError && !r.amountLoaded">-</span>
+              </td>
+              <td>
+                {{ fmt(r.amount - r.debit) }}
               </td>
 
             </tr>

@@ -213,7 +213,7 @@ exports.getReportPage = async (req, res) => {
 
         union all
 
-        select p.SupplierID,  0  as 'GrnAmount', 0  as 'totalInv',sum( pd.PayAmt) as 'totalPayment' 
+        select p.SupplierID,  0  as 'GrnAmount', 0  as 'totalInv',sum(  pd.PayAmt + pd.AmtAdj ) as 'totalPayment' 
         from FinApPaymentDetail  pd
         join FinApPayment as p on p.PaymentID = pd.PaymentID
         where  p.PaymentDate between  @startDate and @endDate and  p.Status = 'CLOSED'
@@ -621,8 +621,9 @@ exports.getJournalAp = async (req, res) => {
         where i.InvDate   between @startDate and @endDate
 
         union all
-        select 'APP' as 'prefix', p.PaymentID as 'id', p.Amount as 'amount',  p.SupplierID ,s.SupplierName, p.PaymentDate as 'date'
-        from FinApPayment p 
+        select 'APP' as 'prefix', p.PaymentID as 'id', (  pd.PayAmt + pd.AmtAdj  ) as 'amount',  p.SupplierID ,s.SupplierName, p.PaymentDate as 'date'
+        from FinApPaymentDetail  pd
+        join FinApPayment as p on p.PaymentID = pd.PaymentID 
         left join FinMsSupplier as s on s.SupplierID = p.SupplierID
         where  p.PaymentDate   between @startDate and @endDate and p.status = 'CLOSED'
       ) as t1 
@@ -668,8 +669,9 @@ exports.getJournalAp = async (req, res) => {
       Set @startDate = '${startDate}'  
       set @endDate = '${endDate}' 
 
-      select  sum(p.Amount) as 'amount'
-        from FinApPayment p 
+      select sum(  pd.PayAmt + pd.AmtAdj ) as 'amount'
+        from FinApPaymentDetail  pd
+        join FinApPayment as p on p.PaymentID = pd.PaymentID 
         left join FinMsSupplier as s on s.SupplierID = p.SupplierID
         where  p.PaymentDate   between @startDate and @endDate and p.status = 'CLOSED'
     `; 

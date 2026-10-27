@@ -150,6 +150,31 @@ export class CustomerComponent implements OnInit {
     });
   }
 
+  goToNextMonth(): void {
+    const base = this.startDate ? new Date(this.startDate + 'T00:00:00') : new Date();
+    const firstDay = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+    const lastDay = new Date(base.getFullYear(), base.getMonth() + 2, 0);
+
+    const startDate = this.toYmd(firstDay);
+    const endDate = this.toYmd(lastDay);
+
+    this.router.navigate(['/customer'], {
+      queryParams: {
+        dbName: this.dbName,
+        startDate,
+        endDate,
+        lastPaymentDate: endDate,
+      },
+    });
+  }
+
+  private toYmd(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
   exportToExcel(): void {
     if (!this.data.length) {
       alert('Tidak ada data supplier untuk diexport.');

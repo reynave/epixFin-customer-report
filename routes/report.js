@@ -51,7 +51,9 @@ router.get('/', (req, res) => {
   });
 });
 router.get('/getCustomer', reportController.getCustomer); 
-router.get('/customer', validateStartDateYear, reportController.getReportPage);  
+router.get('/customer', validateStartDateYear, reportController.getReportPage); 
+ router.get('/saldoAwal', validateStartDateYear, reportController.getSaldoAwal); 
+ 
 router.get('/customer/detail', validateStartDateYear, reportController.getReportDetail);  
 router.get('/yearly',   reportController.getYearlyReport);  
 router.get('/getJournalAp',   reportController.getJournalAp);  

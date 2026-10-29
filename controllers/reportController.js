@@ -270,11 +270,12 @@ exports.getReportPage = async (req, res) => {
 
 
     let totalSaldoAwal = q_saldoAwal.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
+    //let totalSaldoAwal = result.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
 
 
     let totalInvoice = result.recordset.reduce((sum, row) => sum + (row.totalInv || 0), 0);
     let totalPayment = result.recordset.reduce((sum, row) => sum + (row.totalPayment || 0), 0);
-    let totalBalance = result.recordset.reduce((sum, row) => sum + (row.balance || 0), 0);
+    let totalBalance = totalSaldoAwal + totalInvoice - totalPayment;
 
     return res.json({
       requestedDb: dbName,
@@ -752,6 +753,86 @@ exports.getJournalAmount = async (req, res) => {
       filter: req.query,
       q: q,
       result: result.recordsets[0],
+    });
+  }
+  catch (err) {
+    return res.status(500).json({
+      status: 'error getJournalAmount',
+      requestedDb: dbName,
+      error: 'Gagal ambil detail laporan: ' + err.message,
+    });
+  }
+}
+
+
+exports.getSaldoAwal = async (req, res) => {
+ const dbName = validateDbNameOrRespond(req, res);
+  if (!dbName) return;
+
+  try {
+       const pool = await getPool(dbName);
+    // Default laporan tahunan Jan s/d Des 2026, bisa di-override lewat query
+    //const id = req.query.id ;
+   // const prefix = req.query.prefix ;
+    const { startDate   } = req.query;
+    let startSaldoAwal = '2000-01-01';
+
+    const q = `
+         Declare @startDate date
+      Declare @endDate date
+
+      Set @startDate = '${startSaldoAwal}'
+      Set @endDate = DATEADD(day, -1, '${startDate}')  
+ 
+     
+     select  sum(t1.Invoice - t1.Paid ) as 'saldo awal' , SUBSTRING(s.ApAcc, CHARINDEX('-', s.ApAcc) + 1, LEN(s.ApAcc)) as 'ApAccId', s.ApAcc
+	 from (
+
+        -- TAGIHAN berdasrkan GRN
+        select g.SupplierID , g.ReceivedDate 'Date',  g.TranxID,  g.TotalAmount 'Invoice',
+         0 as 'Paid' , 'GRN' as 'ID'
+        from FinMsGRN g
+        where g.ReceivedDate between @startDate and @endDate
+
+         UNION ALL 
+       -- GRN SUDAH DIBAYAR (1 baris per TranxID, tidak dobel walau invoice/payment detail-nya banyak)
+        select g.SupplierID,
+          MAX(p.PaymentDate) as 'Date',
+          g.TranxID, 0 as 'Invoice', g.TotalAmount as 'Paid', 
+          MIN(CAST(appd.PaymentID as varchar(20))) as 'ID'
+        from FinMsGRN as g
+        join FinApInvoiceDetail as apid on apid.TranxID = g.TranxID
+        join FinApPaymentDetail as appd on apid.InvID = appd.InvID
+        left join FinApPayment as p on p.PaymentID = appd.PaymentID
+        where p.PaymentDate between @startDate and @endDate
+        group by g.SupplierID, g.TranxID, g.TotalAmount
+
+      ) t1
+	  left join FinMsSupplier as s on s.SupplierID = t1.SupplierID
+      group by    s.ApAcc
+      order by s.ApAcc 
+    `;
+
+     let result = await pool.query(q);
+
+    const a = `select AccId, "Desc" as 'accountName' from FinMsAccount`;
+     let accountResult = await pool.query(a); 
+
+ for (const acc of accountResult.recordset) {
+      const row = result.recordset.find(r => String(r.ApAccId) === String(acc.AccId));
+      if (row) {
+        row.accountName = acc.accountName; 
+      }
+    }
+
+
+    
+    return res.json({
+      status: 'ok',
+      requestedDb: dbName,
+      filter: req.query, 
+      data: result.recordset, 
+      q : q, 
     });
   }
   catch (err) {

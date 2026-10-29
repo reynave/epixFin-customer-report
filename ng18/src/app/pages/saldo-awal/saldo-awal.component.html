@@ -1,0 +1,103 @@
+<div class="container my-2">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <a href="javascript:void(0)" (click)="goBack()" class="btn btn-outline-secondary btn-sm mb-2 shadow-sm">
+        <i class="bi bi-arrow-left me-1"></i> Kembali
+      </a>
+      <h2 class="fw-bold text-dark mb-0">Detail Saldo Awal (Account)</h2>
+      <p class="text-muted mb-0">
+        Database: <span class="fw-bold text-dark">{{ dbName }}</span> |
+        Periode: <span class="fw-bold text-dark">{{ startDate }} s/d {{ endDate }}</span>
+      </p>
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-outline-secondary" (click)="print()">
+        <i class="bi bi-printer me-1"></i> Cetak
+      </button>
+      <button class="btn btn-outline-secondary" (click)="exportToExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i> Export *.xlsx
+      </button>
+    </div>
+  </div>
+
+  <div class="mb-2 text-end">
+    <a href="javascript:void(0)" (click)="toggleQuery()"><small>Show/Hide Queries</small></a>
+  </div>
+  <div class="alert alert-light" [class.d-none]="!showQuery" role="alert">
+    <div>
+      <strong>Query:</strong>
+      <code><pre>{{ query }}</pre></code>
+    </div>
+  </div>
+
+  <!-- Table Container -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 border-0">
+      <div class="row align-items-center">
+        <div class="col">
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" class="form-control bg-light border-start-0"
+              placeholder="Cari ID / Nama Account..." [(ngModel)]="keyword" (input)="applyFilter()" />
+          </div>
+        </div>
+        <div class="col text-md-end mt-2 mt-md-0">
+          <span class="text-muted small">Menampilkan {{ filtered.length }} dari {{ data.length }} record</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th scope="col" class="ps-4">ID Account</th>
+              <th scope="col">Kode Account</th>
+              <th scope="col">Nama Account</th>
+              <th scope="col" class="text-end pe-4">Saldo Awal</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngIf="loading">
+              <td colspan="4" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-2 mb-0">Mengambil data dari server...</p>
+              </td>
+            </tr>
+            <tr *ngIf="!loading && error">
+              <td colspan="4" class="text-center py-4 text-danger">
+                <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
+                {{ error }}
+              </td>
+            </tr>
+            <tr *ngIf="!loading && !error && filtered.length === 0">
+              <td colspan="4" class="text-center py-4 text-muted">
+                <i class="bi bi-search me-1"></i> Tidak ada data ditemukan.
+              </td>
+            </tr>
+            <tr *ngFor="let item of filtered">
+              <td class="ps-4"><code class="text-secondary">{{ item.ApAccId || '-' }}</code></td>
+              <td><code class="text-secondary">{{ item.ApAcc || '-' }}</code></td>
+              <td class="fw-semibold">{{ item.accountName || '-' }}</td>
+              <td class="text-end pe-4" [ngClass]="saldoClass(item['saldo awal'])">{{ fmt(item['saldo awal']) }}</td>
+            </tr>
+          </tbody>
+          <tfoot class="table-group-divider fw-bold bg-light">
+            <tr>
+              <td colspan="3" class="ps-4">TOTAL</td>
+              <td class="text-end pe-4">{{ fmt(totalSaldo) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="my-3 text-muted text-center small">
+  <small>Ver 1.260827.0</small>
+</div>

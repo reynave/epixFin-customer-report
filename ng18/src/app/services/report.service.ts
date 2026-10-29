@@ -67,4 +67,17 @@ export class ReportService {
       .set('prefix', params.prefix);
     return this.http.get<any>(`${this.apiUrl}/${dbName}/getJournalAmount`, { params: p });
   }
+
+  getSaldoAwal(
+    dbName: string,
+    params: { startDate: string; endDate: string; lastPaymentDate?: string }
+  ): Observable<any> {
+    let p = new HttpParams()
+      .set('startDate', params.startDate)
+      .set('endDate', params.endDate);
+    if (params.lastPaymentDate) {
+      p = p.set('lastPaymentDate', params.lastPaymentDate);
+    }
+    return this.http.get<any>(`${this.apiUrl}/${dbName}/saldoAwal`, { params: p });
+  }
 }

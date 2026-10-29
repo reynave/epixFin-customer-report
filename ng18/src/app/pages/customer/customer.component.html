@@ -52,11 +52,11 @@
   </div>
 
   <!-- Summary Cards -->
-  <div class="row g-3 mb-4">
-    <div class="col">
+  <div class="row g-2 mb-4">
+    <div class="col-1">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
-          <span class="text-muted small fw-medium">Total Supplier</span>
+          <span class="text-muted small fw-medium">Suppliers</span>
           <h3 class="fw-bold text-primary mt-2 mb-0">{{ total }}</h3>
         </div>
       </div>
@@ -64,7 +64,10 @@
     <div class="col">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
-          <span class="text-muted small fw-medium">Total Saldo Awal</span>
+          <span class="text-muted small fw-medium">Total Saldo Awal</span> 
+          <a [routerLink]="['/saldo-awal']"
+            [queryParams]="{ dbName: dbName, startDate: startDate, endDate: endDate, lastPaymentDate: lastPaymentDate }"
+            class="mx-2">ACC Detail  <i class="bi bi-box-arrow-up-right"></i></a>
           <h3 class="fw-bold text-primary mt-2 mb-0">Rp {{ fmt(summary.totalSaldoAwal) }}</h3>
         </div>
       </div>

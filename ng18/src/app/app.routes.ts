@@ -6,11 +6,13 @@ import { CustomerDetailAllComponent } from './pages/customer-detail-all/customer
 import { CustomerListComponent } from './pages/customer-list/customer-list.component';
 import { YearlyComponent } from './pages/yearly/yearly.component';
 import { JournalComponent } from './pages/journal/journal.component';
+import { SaldoAwalComponent } from './pages/saldo-awal/saldo-awal.component';
 
 export const routes: Routes = [
   { path: '', component: LauncherComponent },
   { path: 'customer', component: CustomerComponent },
   { path: 'journal', component: JournalComponent },
+  { path: 'saldo-awal', component: SaldoAwalComponent },
   
   { path: 'customer-detail', component: CustomerDetailComponent },
   { path: 'customer-detail-all', component: CustomerDetailAllComponent },

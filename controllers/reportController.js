@@ -88,7 +88,7 @@ function QuerySaldoAwal(start = '2026-01-01') {
   const startDate = new Date(start);
   startDate.setDate(startDate.getDate() - 1);
   const formattedStartDate = startDate.toISOString().split('T')[0];
-
+/*
   const q0 = `
  
       Declare @startDate date
@@ -122,8 +122,53 @@ function QuerySaldoAwal(start = '2026-01-01') {
       group by t1.SupplierID
       order by t1.SupplierID 
     `;
-    console.log('QuerySaldoAwal:', q0);
-  return q0;
+*/
+const q1 = `
+        Declare @startDate date
+      Declare @endDate date
+
+      Set @startDate = '2000-01-01'
+      Set @endDate = '${formattedStartDate}'  
+        
+select  t1.SupplierID, 
+sum(t1.GrnAmount +t1.totalInv  - t1.totalPayment ) as 'saldoAwal'
+from (
+
+      select  g.SupplierID, 'GRN' as 'TypeID', g.TranxID as 'id', (g.TotalAmount) as 'GrnAmount' , 0  'totalInv', 0 'totalPayment' 
+      from FinMsGRN as g
+      left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
+      where  g.ReceivedDate between  @startDate and @endDate
+      and id.InvID is null  
+	  and g.SupplierID in (select g.SupplierID from (select SupplierID from FinMsGRN 
+where ReceivedDate > '2025-01-01'
+group by SupplierID) as g)
+
+      union all
+
+      select i.SupplierID, 'INV' as 'TypeID', i.InvID as 'id',    0  as 'GrnAmount', (i.InvTotal ) as 'totalInv', 0 'totalPayment'
+      from FinApInvoice as i
+      where i.InvDate between  @startDate and @endDate
+  and i.SupplierID in (select g.SupplierID from (select SupplierID from FinMsGRN 
+where ReceivedDate > '2025-01-01'
+group by SupplierID) as g)
+
+      union all
+
+      select  p.SupplierID, 'INV' as 'TypeID', pd.InvID,  0  as 'GrnAmount', 0  as 'totalInv',(pd.Amount) 'totalPayment' 
+      from FinApPaymentDetail  pd
+      join FinApPayment as p on p.PaymentID = pd.PaymentID
+      where  p.PaymentDate between  @startDate and @endDate and  p.Status = 'CLOSED'
+	and p.SupplierID in (select g.SupplierID from (select SupplierID from FinMsGRN 
+where ReceivedDate > '2025-01-01'
+group by SupplierID) as g)
+
+      ) as t1  
+        group by t1.SupplierID
+      order by t1.SupplierID 
+        `;
+
+    console.log('QuerySaldoAwal:', q1);
+  return q1;
 }
  
 exports.getCustomer = async (req, res) => {
@@ -180,6 +225,16 @@ exports.getReportPage = async (req, res) => {
       });
     } 
 
+    // startDate tidak boleh kurang dari 2026-01-01
+    if (start < '2026-01-01') {
+      return res.status(400).json({
+        status: 'error',
+        warning: 'startDate tidak boleh kurang dari 2026-01-01.',
+        error: `startDate "${start}" di bawah batas minimal 2026-01-01.`,
+        requestedDb: dbName,
+      });
+    }
+
     const pool = await getPool(dbName);
     const q = `
         Declare @startDate DateTime
@@ -199,7 +254,7 @@ exports.getReportPage = async (req, res) => {
 
           select  g.SupplierID , sum(g.TotalAmount) as 'GrnAmount' , 0  as 'totalInv', 0 as 'totalPayment' 
         from FinMsGRN as g
-        left join FinApInvoiceDetail as id on id.TranxID = g.TranxID
+        left join FinApInvoiceDetail as id on id.TranxID = g.TranxID 
         where  g.ReceivedDate between  @startDate and @endDate
           and id.InvID is null 
           group by g.SupplierID
@@ -223,7 +278,8 @@ exports.getReportPage = async (req, res) => {
       group by 	a1.SupplierID
       
       
-      `;
+      `; 
+
     const result = await pool
       .request()
       .query(q);
@@ -269,8 +325,8 @@ exports.getReportPage = async (req, res) => {
     }
 
 
-    let totalSaldoAwal = q_saldoAwal.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
-    //let totalSaldoAwal = result.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
+    //let totalSaldoAwal = q_saldoAwal.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
+    let totalSaldoAwal = result.recordset.reduce((sum, row) => sum + (row.saldoAwal || 0), 0);
 
 
     let totalInvoice = result.recordset.reduce((sum, row) => sum + (row.totalInv || 0), 0);

@@ -27,6 +27,7 @@ export class CustomerComponent implements OnInit {
   loading = false;
   error = '';
   keyword = '';
+  warning = '';
 
   footTotals = { saldoAwal: 0, grn: 0, invoice: 0, paid: 0, result: 0 };
 
@@ -42,6 +43,9 @@ export class CustomerComponent implements OnInit {
       this.startDate = qp['startDate'] || '';
       this.endDate = qp['endDate'] || '';
       this.lastPaymentDate = qp['lastPaymentDate'] || this.endDate;
+
+      this.startDate = this.enforceMinStartDate(this.startDate);
+
       this.fetchReport();
     });
   }
@@ -173,6 +177,20 @@ export class CustomerComponent implements OnInit {
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
+  }
+
+  // Start date minimal 2026-01-01. Kalau tahun < 2026, tampilkan warning
+  // dan paksa ke 2026-01-01.
+  private enforceMinStartDate(value: string): string {
+    if (!value) {
+      return value;
+    }
+    const year = Number(value.slice(0, 4));
+    if (!isNaN(year) && year < 2026) {
+      this.warning = `Start date "${value}" tidak diperbolehkan (minimal 2026-01-01). Diubah otomatis ke 2026-01-01.`;
+      return '2026-01-01';
+    }
+    return value;
   }
 
   exportToExcel(): void {

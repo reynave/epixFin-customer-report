@@ -27,6 +27,24 @@ function validateDbNameOrRespond(req, res) {
   return dbName;
 }
 
+// Batas minimal startDate untuk seluruh endpoint laporan.
+const MIN_START_DATE = '2026-01-01';
+
+// Validasi startDate tidak boleh kurang dari MIN_START_DATE.
+// Kalau melanggar, kirim response error 400 & kembalikan true (caller wajib return).
+function validateStartDateRespond(res, dbName, startDate) {
+  if (!startDate || String(startDate) >= MIN_START_DATE) {
+    return false;
+  }
+  res.status(400).json({
+    status: 'error',
+    warning: `startDate tidak boleh kurang dari ${MIN_START_DATE}.`,
+    error: `startDate "${startDate}" di bawah batas minimal ${MIN_START_DATE}.`,
+    requestedDb: dbName,
+  });
+  return true;
+}
+
 // List database yang tersedia di SQL Server
 exports.listDatabases = async (req, res) => {
   try {
@@ -226,14 +244,7 @@ exports.getReportPage = async (req, res) => {
     } 
 
     // startDate tidak boleh kurang dari 2026-01-01
-    if (start < '2026-01-01') {
-      return res.status(400).json({
-        status: 'error',
-        warning: 'startDate tidak boleh kurang dari 2026-01-01.',
-        error: `startDate "${start}" di bawah batas minimal 2026-01-01.`,
-        requestedDb: dbName,
-      });
-    }
+    if (validateStartDateRespond(res, dbName, start)) return;
 
     const pool = await getPool(dbName);
     const q = `
@@ -376,6 +387,8 @@ exports.getReportDetail = async (req, res) => {
 
     const start = startDate;
     const end = endDate;
+
+    if (validateStartDateRespond(res, dbName, start)) return;
    
 
     const pool = await getPool(dbName);
@@ -537,6 +550,8 @@ exports.getYearlyReport = async (req, res) => {
       });
     }
 
+    if (validateStartDateRespond(res, dbName, startDate)) return;
+
     // Bangun daftar bulan dari startDate s/d endDate (mis. 2026-01 s/d 2026-12)
     const months = [];
     const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
@@ -655,6 +670,8 @@ exports.getJournalAp = async (req, res) => {
     // Default laporan tahunan Jan s/d Des 2026, bisa di-override lewat query
     const startDate = req.query.startDate || '2026-01-01';
     const endDate = req.query.endDate || '2026-12-31';
+
+    if (validateStartDateRespond(res, dbName, startDate)) return;
 
    // const start = new Date(startDate);
    // const end = new Date(endDate);
@@ -831,6 +848,8 @@ exports.getSaldoAwal = async (req, res) => {
     //const id = req.query.id ;
    // const prefix = req.query.prefix ;
     const { startDate   } = req.query;
+    if (validateStartDateRespond(res, dbName, startDate)) return;
+
     let startSaldoAwal = '2000-01-01';
 
     const q = `

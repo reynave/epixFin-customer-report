@@ -75,13 +75,13 @@
   <!-- Detail Table Container -->
   <div class="card border-0 shadow-sm">
     <!-- Search Filter -->
-    <div class="card-header bg-white py-3 border-0">
+    <div class="card-header bg-white py-3 border-0 sticky-top">
       <div class="row align-items-center">
         <div class="col-md-4">
           <div class="input-group">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
             <input type="text" id="search-input" class="form-control bg-light border-start-0"
-              placeholder="Cari No. Tranx, Inv ID, Payment ID..." [(ngModel)]="keyword" (input)="applyFilter()" />
+              placeholder="Cari Tranx ID, Inv ID, Payment ID, Type, atau nominal..." [(ngModel)]="keyword" (input)="applyFilter()" />
           </div>
         </div>
         <div class="col-md-8 text-md-end mt-2 mt-md-0">
@@ -96,7 +96,7 @@
           <thead class="table-light">
             <tr>
               <th scope="col" class="ps-4">Tanggal</th>
-              <th scope="col" class="text-center">Type</th>
+              <th scope="col" class="text-center">Noted ID</th>
               <th scope="col">Tranx ID</th>
               <th scope="col">Inv ID</th>
               <th scope="col">Payment ID</th>
@@ -128,16 +128,16 @@
             </tr>
             <tr *ngFor="let item of filtered">
               <td class="ps-4">{{ dateStr(item.date) }}</td>
-              <td class="text-center"><span class="badge" [ngClass]="badgeClass(item.TypeID)">{{ item.TypeID || '-' }}</span></td>
+              <td class="text-center"><span class="badge" [ngClass]="badgeClass(item.TypeID)">{{ item.TypeID  }}</span></td>
               <td>
-                <code class="text-dark">{{ item.TypeID === 'GRN' ? (item.Id || '-') : '-' }}</code>
+                <code class="text-dark">{{ item.TranxID  || '-' }}</code>
                 <button *ngIf="item.historyTranxID?.length" type="button" class="btn btn-link btn-sm p-0 d-block"
                   (click)="showHistory(item.historyTranxID)">
                   <i class="bi bi-clock-history me-1"></i>History ({{ item.historyTranxID.length }})
                 </button>
               </td>
-              <td><span class="badge bg-light text-dark border">{{ item.TypeID !== 'GRN' ? (item.Id || '-') : '-' }}</span></td>
-              <td>{{ item.paymentId || '-' }}</td>
+              <td><span class="badge bg-light text-dark border">{{ item.InvId  || '-'  }}</span></td>
+              <td>{{ item.PaymentId || '-' }}</td>
               <td class="text-end" [ngClass]="neg(item.GrnAmount)">{{ fmt(item.GrnAmount) }}</td>
               <td class="text-end fw-semibold" [ngClass]="neg(item.totalInv)">{{ fmt(item.totalInv) }}</td>
               <td class="text-end fw-semibold" [ngClass]="neg(item.totalPayment)">{{ fmt(item.totalPayment) }}</td>

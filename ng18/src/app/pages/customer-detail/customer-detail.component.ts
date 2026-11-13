@@ -80,13 +80,28 @@ export class CustomerDetailComponent implements OnInit {
 
   applyFilter(): void {
     const kw = this.keyword.toLowerCase().trim();
-    this.filtered = kw
-      ? this.data.filter(
-          (item) =>
-            (item.Id && String(item.Id).toLowerCase().includes(kw)) ||
-            (item.paymentId && String(item.paymentId).toLowerCase().includes(kw))
-        )
-      : this.data;
+
+    if (!kw) {
+      this.filtered = this.data;
+    } else {
+      this.filtered = this.data.filter((item) => {
+        const searchable = [
+          item.InvId,
+          item.TranxID,
+          item.TypeID,
+          item.PaymentId,
+          item.totalInv,
+          item.totalPayment,
+          item.balance,
+        ];
+        return searchable.some(
+          (value) =>
+            value !== null &&
+            value !== undefined &&
+            String(value).toLowerCase().includes(kw)
+        );
+      });
+    }
 
     let grn = 0;
     let invoice = 0;

@@ -34,7 +34,7 @@ app.get('/health/db', reportController.healthDb);
 
 // Root Endpoint
 app.get('/', (req, res) => {
-  return res.redirect('/public/index.html');
+  return res.redirect('/public/browser/index.html');
 });
 
 // 404 Handler (Penanganan Endpoint Tidak Ditemukan)
